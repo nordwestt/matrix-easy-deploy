@@ -416,6 +416,14 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("MED_ADMIN_PASSWORD=secret123456789", env_text)
         self.assertNotIn("OLD_KEY=keep-me", env_text)
 
+    def test_link_calls_compose_env_symlinks_module_env(self):
+        ctx = apply.ApplyContext(self.root)
+        ctx.env_file.write_text("MATRIX_DOMAIN=matrix.example.com\n")
+        apply.link_calls_compose_env(ctx)
+        link = self.root / "modules/calls/.env"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(link.resolve(), ctx.env_file.resolve())
+
     def test_write_env_file_excludes_mas_signing_keys_and_templates(self):
         ctx = apply.ApplyContext(self.root)
         apply.write_env_file(

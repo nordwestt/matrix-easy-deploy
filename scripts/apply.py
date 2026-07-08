@@ -1140,6 +1140,16 @@ def write_env_file(ctx: ApplyContext, env_vars: dict) -> None:
     ctx.env_file.chmod(0o600)
 
 
+def link_calls_compose_env(ctx: ApplyContext) -> None:
+    """Symlink modules/calls/.env → repo .env so docker compose picks up variables."""
+    calls_dir = ctx.project_root / "modules" / "calls"
+    calls_dir.mkdir(parents=True, exist_ok=True)
+    link = calls_dir / ".env"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to("../../.env")
+
+
 def render_template(src: Path, dest: Path, values: dict) -> None:
     content = src.read_text()
     for key, value in values.items():
@@ -1701,6 +1711,7 @@ def apply_configuration(
     saved = create_or_update_secrets(ctx, existing, rotate=rotate_secrets, mas_enabled=mas_enabled)
     env_vars = build_env_vars(config, derived, saved)
     write_env_file(ctx, env_vars)
+    link_calls_compose_env(ctx)
     render_templates(ctx, config, env_vars)
     reconcile_module_state(ctx, config)
     if reconcile_modules:

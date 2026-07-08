@@ -1,3 +1,5 @@
+# Compose reads variables from modules/calls/.env (symlinked to ../../.env by apply.sh).
+# From repo root you can also use: docker compose -f modules/calls/docker-compose.yml --env-file .env …
 services:
   coturn:
     image: coturn/coturn:latest

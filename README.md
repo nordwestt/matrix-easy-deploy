@@ -1170,6 +1170,14 @@ The LiveKit JWT service (`matrix_lk_jwt_service`) could not validate the caller'
 2. **Hairpin NAT** — If the server cannot reach its own public HTTPS URL from inside Docker, OpenID lookup times out. `modules/calls/docker-compose.yml` maps `SERVER_NAME` and `MATRIX_DOMAIN` to `host-gateway` for lk-jwt-service; ensure both DNS names resolve to this host.
 3. **Discovery / CORS** — Element X fetches `org.matrix.msc4143.rtc_foci` from `/.well-known/matrix/client` on `SERVER_NAME`; that response needs `Access-Control-Allow-Origin` (set by Caddy in this stack).
 
+To recreate the JWT service after config changes, run from the repo root (or use `bash start.sh`):
+
+```bash
+cd modules/calls && docker compose up -d --force-recreate lk-jwt-service
+```
+
+`apply.sh` symlinks `modules/calls/.env` to the repo `.env` so Compose can substitute variables. If you run Compose from elsewhere, pass `--env-file .env` explicitly.
+
 Diagnostics:
 
 ```bash

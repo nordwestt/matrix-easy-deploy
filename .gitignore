@@ -1,5 +1,6 @@
 # Secrets — never commit these
 .env
+modules/calls/.env
 
 # Rendered config files (generated from templates by setup.sh)
 caddy/Caddyfile
