@@ -1162,6 +1162,23 @@ Element X only supports MatrixRTC (LiveKit-backed) calls, not legacy Synapse VoI
 
 After `bash apply.sh`, Element Web is configured with `element_call.use_exclusively` so calls use MatrixRTC. Hard-refresh Element Web (or restart the desktop app) after apply. If you overrode `features.element.extra_config`, ensure you did not re-enable legacy VoIP there.
 
+**Element X shows "MISSING_MATRIX_RTC_TRANSPORT" when starting a call**
+
+Element X discovered your `org.matrix.msc4143.rtc_foci` entry but rejected the LiveKit JWT service URL. After reading `.well-known/matrix/client`, Element Call probes the advertised `livekit_service_url` itself (not only `/healthz`). If that URL returns 404, the call fails immediately.
+
+Verify:
+
+```bash
+# Must be HTTP 200 (lk-jwt-service health check via Caddy)
+curl -sSI "https://livekit.example.com/livekit/jwt" | head -1
+curl -sSI "https://livekit.example.com/livekit/jwt/healthz" | head -1
+
+# Must include rtc_foci
+curl -sS "https://example.com/.well-known/matrix/client" | jq '.["org.matrix.msc4143.rtc_foci"]'
+```
+
+Re-run `bash apply.sh` and restart Caddy so the JWT service root path is proxied to `/healthz`. A `401` on `/_matrix/client/unstable/org.matrix.msc4143/rtc/transports` without a token is normal; Element X falls back to well-known.
+
 **Element X shows "OPEN_ID_ERROR" when starting a call**
 
 The LiveKit JWT service (`matrix_lk_jwt_service`) could not validate the caller's Matrix OpenID token against your homeserver. Common causes:

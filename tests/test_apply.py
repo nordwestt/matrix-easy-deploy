@@ -483,6 +483,8 @@ class ApplyTests(unittest.TestCase):
 
         caddy = (self.root / "caddy/Caddyfile").read_text()
         self.assertIn("matrix.example.com, example.com {", caddy)
+        self.assertIn("handle /livekit/jwt /livekit/jwt/", caddy)
+        self.assertIn("reverse_proxy matrix_lk_jwt_service:8080/healthz", caddy)
         self.assertIn("handle_path /livekit/jwt*", caddy)
         self.assertIn("reverse_proxy matrix_lk_jwt_service:8080", caddy)
         self.assertIn("handle_path /livekit/sfu*", caddy)
@@ -831,6 +833,8 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r"^example\.com \{", caddy, re.MULTILINE)), 1)
         self.assertIn("handle /_matrix/*", caddy)
         self.assertIn("handle_path /auth/*", caddy)
+        self.assertIn("handle /livekit/jwt /livekit/jwt/", caddy)
+        self.assertIn("reverse_proxy matrix_lk_jwt_service:8080/healthz", caddy)
         self.assertIn("handle_path /livekit/jwt*", caddy)
         self.assertIn("handle {\n        reverse_proxy matrix_element:80", caddy)
         self.assertNotIn("handle /auth*", caddy)
