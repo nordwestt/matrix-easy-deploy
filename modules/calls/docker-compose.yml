@@ -34,8 +34,8 @@ services:
     # Reach the public homeserver URL from inside Docker (avoids hairpin-NAT failures
     # when validating OpenID tokens against the federation userinfo endpoint).
     extra_hosts:
-      - "${SERVER_NAME}:host-gateway"
-      - "${MATRIX_DOMAIN}:host-gateway"
+      "${SERVER_NAME}": "host-gateway"
+      "${MATRIX_DOMAIN}": "host-gateway"
     depends_on:
       - livekit
     networks:
