@@ -12,7 +12,9 @@
     }
 {{CADDY_SYNAPSE_ADMIN_BLOCK}}
     # Well-known for Matrix federation & client autodiscovery
+    # CORS is required for Element X / embedded call WebViews fetching rtc_foci.
     handle /.well-known/matrix/* {
+        header Access-Control-Allow-Origin *
         reverse_proxy {{HOMESERVER_UPSTREAM}}
     }
 

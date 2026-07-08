@@ -478,6 +478,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("handle_path /livekit/jwt*", caddy)
         self.assertIn("reverse_proxy matrix_lk_jwt_service:8080", caddy)
         self.assertIn("handle_path /livekit/sfu*", caddy)
+        self.assertIn("Access-Control-Allow-Origin", caddy)
         self.assertNotIn("{{", caddy)
 
         synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
@@ -493,6 +494,7 @@ class ApplyTests(unittest.TestCase):
 
         livekit = (self.root / "modules/calls/livekit/livekit.yaml").read_text()
         self.assertIn("room:\n  auto_create: false", livekit)
+        self.assertIn("sfu_webhook", livekit)
 
         modules_state = yaml.safe_load((self.root / ".matrix-easy-deploy/modules.yaml").read_text())
         self.assertIn("hookshot", modules_state)
@@ -773,7 +775,7 @@ class ApplyTests(unittest.TestCase):
             "}\n\n"
             "# LiveKit\n"
             "example.com {\n"
-            "    handle /livekit/jwt* {\n"
+            "    handle_path /livekit/jwt* {\n"
             "        reverse_proxy matrix_lk_jwt_service:8080\n"
             "    }\n"
             "}\n\n"
@@ -785,7 +787,7 @@ class ApplyTests(unittest.TestCase):
         merged = apply.merge_duplicate_caddy_site_blocks(original)
         self.assertEqual(merged.count("example.com {"), 1)
         self.assertIn("handle /_matrix/*", merged)
-        self.assertIn("handle /livekit/jwt*", merged)
+        self.assertIn("handle_path /livekit/jwt*", merged)
         self.assertIn("reverse_proxy matrix_element:80", merged)
 
     def test_merge_duplicate_caddy_site_blocks_leaves_distinct_hosts(self):
@@ -821,7 +823,7 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r"^example\.com \{", caddy, re.MULTILINE)), 1)
         self.assertIn("handle /_matrix/*", caddy)
         self.assertIn("handle_path /auth/*", caddy)
-        self.assertIn("handle /livekit/jwt*", caddy)
+        self.assertIn("handle_path /livekit/jwt*", caddy)
         self.assertIn("handle {\n        reverse_proxy matrix_element:80", caddy)
         self.assertNotIn("handle /auth*", caddy)
         self.assertEqual(caddy.count("handle_path /auth/*"), 1)

@@ -104,8 +104,15 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
         (root / "caddy/Caddyfile.template").write_text(
             "{{CADDY_MATRIX_HOSTS}} {\n"
             "{{CADDY_MAS_BLOCK}}"
-            "    reverse_proxy {{HOMESERVER_UPSTREAM}}\n"
+            "    handle /_matrix/* {\n"
+            "        reverse_proxy {{HOMESERVER_UPSTREAM}}\n"
+            "    }\n"
             "{{CADDY_SYNAPSE_ADMIN_BLOCK}}"
+            "    handle /.well-known/matrix/* {\n"
+            "        header Access-Control-Allow-Origin *\n"
+            "        reverse_proxy {{HOMESERVER_UPSTREAM}}\n"
+            "    }\n"
+            "{{CADDY_ELEMENT_MATRIX_FALLBACK}}"
             "}\n\n"
             "{{LIVEKIT_DOMAIN}} {\n"
             "    handle_path /livekit/jwt* {\n"
@@ -174,7 +181,11 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
     if full:
         livekit_template = (
             "room:\n  auto_create: false\n"
-            "keys:\n  {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}"
+            "keys:\n  {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}\n"
+            "webhook:\n"
+            "  api_key: {{LIVEKIT_KEY}}\n"
+            "  urls:\n"
+            '    - https://{{LIVEKIT_DOMAIN}}/livekit/jwt/sfu_webhook\n'
         )
     else:
         livekit_template = "keys:\n  {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}\n"

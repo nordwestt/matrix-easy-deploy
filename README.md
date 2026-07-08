@@ -1162,6 +1162,32 @@ Element X only supports MatrixRTC (LiveKit-backed) calls, not legacy Synapse VoI
 
 After `bash apply.sh`, Element Web is configured with `element_call.use_exclusively` so calls use MatrixRTC. Hard-refresh Element Web (or restart the desktop app) after apply. If you overrode `features.element.extra_config`, ensure you did not re-enable legacy VoIP there.
 
+**Element X shows "OPEN_ID_ERROR" when starting a call**
+
+The LiveKit JWT service (`matrix_lk_jwt_service`) could not validate the caller's Matrix OpenID token against your homeserver. Common causes:
+
+1. **JWT path routing** — Caddy must strip the `/livekit/jwt` prefix before proxying to lk-jwt-service (`handle_path`, not plain `handle`). Re-run `bash apply.sh` and reload Caddy if you upgraded from an older config.
+2. **Hairpin NAT** — If the server cannot reach its own public HTTPS URL from inside Docker, OpenID lookup times out. `modules/calls/docker-compose.yml` maps `SERVER_NAME` and `MATRIX_DOMAIN` to `host-gateway` for lk-jwt-service; ensure both DNS names resolve to this host.
+3. **Discovery / CORS** — Element X fetches `org.matrix.msc4143.rtc_foci` from `/.well-known/matrix/client` on `SERVER_NAME`; that response needs `Access-Control-Allow-Origin` (set by Caddy in this stack).
+
+Diagnostics:
+
+```bash
+# JWT service health (should return {"status":"ok"} or similar)
+curl -sS "https://livekit.example.com/livekit/jwt/healthz"
+
+# Federation discovery used for OpenID userinfo lookup
+curl -sS "https://example.com/.well-known/matrix/server"
+
+# CORS on client discovery (needed for Element X)
+curl -sSI "https://example.com/.well-known/matrix/client" | grep -i access-control
+
+# lk-jwt-service logs during a failed call attempt
+docker logs matrix_lk_jwt_service --tail 50
+```
+
+Look for `Failed to look up user info` or timeouts in the JWT service logs.
+
 **1:1 calls fail or audio/video cuts out**
 
 This is almost always a TURN / NAT traversal issue. Check that ports 3478 and 5349 (as well as the UDP relay range 49152–49400) are open in your firewall or VPS security group. Verify coturn is running:

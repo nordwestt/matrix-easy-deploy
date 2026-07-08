@@ -29,3 +29,9 @@ room:
 # ---------------------------------------------------------------------------
 keys:
   {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}
+
+# MSC4140 delegated leave — notify lk-jwt-service when participants disconnect.
+webhook:
+  api_key: {{LIVEKIT_KEY}}
+  urls:
+    - https://{{LIVEKIT_DOMAIN}}/livekit/jwt/sfu_webhook
