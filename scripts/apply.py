@@ -1063,10 +1063,41 @@ def merge_element_customizations(base: dict, element_cfg: dict) -> dict:
     return merged
 
 
+def livekit_jwt_service_url(config: dict) -> str:
+    matrix = config.get("matrix", {}) if isinstance(config.get("matrix", {}), dict) else {}
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    matrix_domain = matrix.get("domain", "")
+    livekit_domain = calls.get("livekit_domain") or f"livekit.{extract_base_domain(matrix_domain)}"
+    return f"https://{livekit_domain}/livekit/jwt"
+
+
+def apply_calls_element_config(target: dict, config: dict) -> None:
+    """Configure Element Web for MatrixRTC when the calls stack is enabled."""
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    if not calls.get("enabled", True):
+        return
+
+    rtc_foci = [
+        {
+            "type": "livekit",
+            "livekit_service_url": livekit_jwt_service_url(config),
+        }
+    ]
+    default_server = target.setdefault("default_server_config", {})
+    default_server.setdefault("org.matrix.msc4143.rtc_foci", rtc_foci)
+
+    element_call = target.setdefault("element_call", {})
+    element_call.setdefault("use_exclusively", True)
+
+
 def build_element_config(config: dict) -> dict:
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
     element_cfg = features.get("element", {}) if isinstance(features.get("element"), dict) else {}
-    return merge_element_customizations(build_default_element_config(config), element_cfg)
+    merged = merge_element_customizations(build_default_element_config(config), element_cfg)
+    apply_calls_element_config(merged, config)
+    return merged
 
 
 def write_json(path: Path, data: dict) -> None:

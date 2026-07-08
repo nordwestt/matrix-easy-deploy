@@ -1131,14 +1131,6 @@ If it doesn't match, wait for DNS to propagate and try again. Caddy logs all cer
 docker logs caddy
 ```
 
-**1:1 calls fail or audio/video cuts out**
-
-This is almost always a TURN / NAT traversal issue. Check that ports 3478 and 5349 (as well as the UDP relay range 49152–49400) are open in your firewall or VPS security group. Verify coturn is running:
-```bash
-docker logs matrix_coturn
-```
-If your VPS is behind a cloud NAT (e.g. AWS, GCP), make sure `external-ip` in `modules/calls/coturn/turnserver.conf` is set to your actual public IP, not the NAT gateway IP.
-
 **Group calls (Element Call) don't connect**
 
 Check that LiveKit is running and that your `livekit.example.com` DNS record is resolving:
@@ -1147,6 +1139,26 @@ docker logs matrix_livekit
 curl -I https://livekit.example.com
 ```
 Also make sure port range 50000–50100/UDP is open in your firewall.
+
+Verify MatrixRTC discovery is exposed on your server name (not only the matrix subdomain):
+```bash
+curl -sS "https://example.com/.well-known/matrix/client" | jq '.["org.matrix.msc4143.rtc_foci"]'
+```
+You should see a LiveKit JWT service URL such as `https://livekit.example.com/livekit/jwt`.
+
+**Element X shows "Unsupported call" for incoming Element Web calls**
+
+Element X only supports MatrixRTC (LiveKit-backed) calls, not legacy Synapse VoIP (`m.call.*`). If Element Web still offers legacy calling, Element X users will see this error.
+
+After `bash apply.sh`, Element Web is configured with `element_call.use_exclusively` so calls use MatrixRTC. Hard-refresh Element Web (or restart the desktop app) after apply. If you overrode `features.element.extra_config`, ensure you did not re-enable legacy VoIP there.
+
+**1:1 calls fail or audio/video cuts out**
+
+This is almost always a TURN / NAT traversal issue. Check that ports 3478 and 5349 (as well as the UDP relay range 49152–49400) are open in your firewall or VPS security group. Verify coturn is running:
+```bash
+docker logs matrix_coturn
+```
+If your VPS is behind a cloud NAT (e.g. AWS, GCP), make sure `external-ip` in `modules/calls/coturn/turnserver.conf` is set to your actual public IP, not the NAT gateway IP.
 
 **Synapse takes a long time to start**
 

@@ -61,6 +61,8 @@ features:
     extra_config: {}
   calls:
     enabled: true
+    # LiveKit + lk-jwt-service for MatrixRTC (Element Call / Element X).
+    # apply.sh also sets Element Web to use MatrixRTC exclusively (not legacy VoIP).
     livekit_domain: livekit.example.com
   local_login_enabled: true
   sso:

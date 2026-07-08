@@ -485,6 +485,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("enabled: true", synapse)
         self.assertIn("extra_well_known_client_content:", synapse)
         self.assertIn("org.matrix.msc4143.rtc_foci:", synapse)
+        self.assertIn("msc4140_enabled: true", synapse)
         self.assertIn("matrix_rtc:", synapse)
         self.assertIn('livekit_service_url: "https://livekit.example.com/livekit/jwt"', synapse)
         self.assertNotIn("\nlivekit:\n", synapse)
@@ -500,6 +501,11 @@ class ApplyTests(unittest.TestCase):
         element = json.loads((self.root / "modules/core/element/config.json").read_text())
         self.assertEqual(element["brand"], "Element")
         self.assertEqual(element["default_server_config"]["m.homeserver"]["base_url"], "https://matrix.example.com")
+        self.assertEqual(
+            element["default_server_config"]["org.matrix.msc4143.rtc_foci"],
+            [{"type": "livekit", "livekit_service_url": "https://livekit.example.com/livekit/jwt"}],
+        )
+        self.assertTrue(element["element_call"]["use_exclusively"])
         self.assertEqual(element["room_directory"]["servers"], ["example.com"])
         self.assertEqual(element["integrations_ui_url"], "https://scalar.vector.im/")
         self.assertIn("SERVER_IMPLEMENTATION=synapse", env_text)
@@ -615,6 +621,18 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(element["bug_report_endpoint_url"], "local")
         self.assertEqual(element["sentry"]["environment"], "prod")
         self.assertEqual(element["custom_translations_url"], "https://assets.example.com/i18n.json")
+
+    def test_apply_configuration_omits_matrixrtc_element_config_when_calls_disabled(self):
+        cfg = self.sample_config()
+        cfg["features"]["calls"] = {"enabled": False}
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        element = json.loads((self.root / "modules/core/element/config.json").read_text())
+        self.assertNotIn("org.matrix.msc4143.rtc_foci", element.get("default_server_config", {}))
+        self.assertNotIn("element_call", element)
 
     def test_apply_configuration_renders_custom_integrations_override(self):
         cfg = self.sample_config()

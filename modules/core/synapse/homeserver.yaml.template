@@ -152,6 +152,7 @@ extra_well_known_client_content:
 
 experimental_features:
   msc3266_enabled: true  # room summary API, required by Element Call
+  msc4140_enabled: true  # delayed events; required for MatrixRTC call signalling
   msc4143_enabled: true
   msc4222_enabled: true
   msc3202_device_masquerading: true
