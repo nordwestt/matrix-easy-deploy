@@ -476,6 +476,101 @@ class ShellEntrypointTests(unittest.TestCase):
             self.assertIn("/_synapse/admin/v2/users/", events_text)
             self.assertNotIn("Fetching registration nonce", result.stderr)
 
+    def test_create_account_mas_existing_user_retries_admin_grant_on_user_in_use(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            events = root / "events.log"
+            put_attempts = root / "put_attempts.txt"
+            put_attempts.write_text("0")
+
+            self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
+            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            (root / ".env").write_text(
+                "SERVER_NAME=example.com\n"
+                "MATRIX_DOMAIN=matrix.example.com\n"
+                "MAS_ENABLED=true\n"
+                "MAS_LOCAL_LOGIN_ENABLED=true\n"
+                "MAS_HOMESERVER_SECRET=mas-admin-token\n"
+            )
+
+            fake_bin = root / "bin"
+            fake_bin.mkdir(parents=True, exist_ok=True)
+            self._write_fake_docker_mas(
+                fake_bin / "docker",
+                exec_body=(
+                    'if [[ "$1" == exec && "$3" == mas-cli ]]; then\n'
+                    '  if [[ "$*" == *register-user* ]]; then\n'
+                    "    echo User already exists >&2\n"
+                    "    exit 1\n"
+                    "  fi\n"
+                    '  if [[ "$*" == *set-password* ]]; then\n'
+                    "    exit 0\n"
+                    "  fi\n"
+                    "fi\n"
+                ),
+            )
+            self._write_executable(
+                fake_bin / "curl",
+                "#!/usr/bin/env bash\n"
+                "echo curl:$* >> \"$EVENTS\"\n"
+                "outfile=''\n"
+                "write_status='false'\n"
+                "url=''\n"
+                "method=''\n"
+                "while [[ $# -gt 0 ]]; do\n"
+                "  case \"$1\" in\n"
+                "    -o) outfile=\"$2\"; shift 2 ;;\n"
+                "    -w) write_status='true'; shift 2 ;;\n"
+                "    -X) method=\"$2\"; shift 2 ;;\n"
+                "    http*://*|https*://*) url=\"$1\"; shift ;;\n"
+                "    *) shift ;;\n"
+                "  esac\n"
+                "done\n"
+                "if [[ \"$method\" == PUT && \"$url\" == *\"/_synapse/admin/v2/users/\"* ]]; then\n"
+                "  attempt=$(cat \"$PUT_ATTEMPTS\")\n"
+                "  attempt=$((attempt + 1))\n"
+                "  printf '%s' \"$attempt\" > \"$PUT_ATTEMPTS\"\n"
+                "  if [[ \"$attempt\" == 1 ]]; then\n"
+                "    printf '{\"errcode\":\"M_USER_IN_USE\",\"error\":\"User ID already taken.\"}' > \"$outfile\"\n"
+                "    printf '400'\n"
+                "    exit 0\n"
+                "  fi\n"
+                "  printf '200' > \"$outfile\"\n"
+                "  printf '200'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+            )
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["EVENTS"] = str(events)
+            env["PUT_ATTEMPTS"] = str(put_attempts)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/create-account.sh",
+                    "--username",
+                    "med-admin",
+                    "--password",
+                    "averylongsecret",
+                    "--admin",
+                    "--yes",
+                ],
+                cwd=root,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr + result.stdout)
+            combined = result.stdout + result.stderr
+            self.assertIn("Retrying admin grant as update", combined)
+            self.assertIn("Account '@med-admin:example.com' created successfully.", result.stdout)
+            self.assertEqual(put_attempts.read_text(), "2")
+
     def test_create_account_mas_existing_user_updates_password_only_when_local_login_enabled(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -550,24 +550,60 @@ register_auth_user() {
 # Homeserver admin — Synapse is the source of truth; auth backend is irrelevant.
 # ---------------------------------------------------------------------------
 
+parse_synapse_error_response() {
+    python3 - <<'PYEOF' "$1"
+import json
+import sys
+
+raw = sys.argv[1]
+try:
+    data = json.loads(raw) if raw else {}
+except Exception:
+    data = {}
+
+errcode = data.get("errcode", "") if isinstance(data, dict) else ""
+error = data.get("error", "") if isinstance(data, dict) else ""
+print(f"{errcode}\t{error}")
+PYEOF
+}
+
+put_synapse_admin_grant() {
+    local response_file="$1"
+    curl -sS -o "$response_file" -w "%{http_code}" \
+        -X PUT "${BASE_URL}/_synapse/admin/v2/users/$(encoded_matrix_user_id)" \
+        -H "Authorization: Bearer ${MAS_HOMESERVER_SECRET}" \
+        -H "Content-Type: application/json" \
+        --data-binary '{"admin": true}'
+}
+
 promote_synapse_admin_via_server_token() {
-    local response_file http_status response_body
+    local response_file http_status response_body err_info err_code
 
     response_file="$(mktemp)"
     trap 'rm -f "${response_file:-}"' RETURN
 
     info "Granting Synapse admin to '$(matrix_user_id)'…"
-    http_status="$(curl -sS -o "$response_file" -w "%{http_code}" \
-        -X PUT "${BASE_URL}/_synapse/admin/v2/users/$(encoded_matrix_user_id)" \
-        -H "Authorization: Bearer ${MAS_HOMESERVER_SECRET}" \
-        -H "Content-Type: application/json" \
-        --data-binary '{"admin": true}')"
+    http_status="$(put_synapse_admin_grant "$response_file")"
 
     if [[ "$http_status" == "200" ]] || [[ "$http_status" == "201" ]]; then
         return 0
     fi
 
     response_body="$(cat "$response_file")"
+    err_info="$(parse_synapse_error_response "$response_body")"
+    err_code="${err_info%%$'\t'*}"
+
+    # MAS registration can create the Synapse user before this call. The v2 users
+    # endpoint may then attempt create instead of modify and return M_USER_IN_USE.
+    if [[ "$http_status" == "400" && "$err_code" == "M_USER_IN_USE" ]]; then
+        warn "User '$(matrix_user_id)' already exists. Retrying admin grant as update…"
+        http_status="$(put_synapse_admin_grant "$response_file")"
+        if [[ "$http_status" == "200" ]] || [[ "$http_status" == "201" ]]; then
+            return 0
+        fi
+        response_body="$(cat "$response_file")"
+    fi
+
     die "Failed to grant Synapse admin (HTTP ${http_status}). Response: ${response_body}"
 }
 
