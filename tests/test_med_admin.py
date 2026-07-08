@@ -19,6 +19,13 @@ def assert_dies_with(capsys: pytest.CaptureFixture[str], fn, *args, message: str
     assert message in capsys.readouterr().err
 
 
+@pytest.fixture(autouse=True)
+def noop_ensure_synapse_server_admin_unless_requested(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    if request.node.get_closest_marker("synapse_admin_check"):
+        return
+    monkeypatch.setattr(med_admin, "ensure_synapse_server_admin", lambda ctx: None)
+
+
 @pytest.fixture
 def repo_root(tmp_path: Path) -> Path:
     (tmp_path / "scripts").mkdir()
@@ -404,6 +411,34 @@ def test_cmd_delete_account_tuwunel_deactivates_user(ctx: med_admin.Context) -> 
         med_admin.cmd_delete_account(ctx, args)
 
     mock_admin.deactivate_user.assert_called_once_with("@alice:example.com")
+
+
+@pytest.mark.synapse_admin_check
+def test_ensure_synapse_server_admin_grants_admin_when_missing(ctx: med_admin.Context) -> None:
+    ctx.base_url = "https://matrix.example.com"
+    ctx.med_admin_username = "med-admin"
+    ctx.med_admin_password = "averylongsecret123"
+    ctx.auth_username = "med-admin"
+    ctx.auth_password = "averylongsecret123"
+
+    with (
+        patch.object(med_admin, "user_has_synapse_server_admin", side_effect=[False, True]),
+        patch.object(med_admin, "_invoke_create_account_admin") as mock_grant,
+    ):
+        med_admin.ensure_synapse_server_admin(ctx)
+
+    mock_grant.assert_called_once_with(ctx, "med-admin", "averylongsecret123")
+
+
+@pytest.mark.synapse_admin_check
+def test_ensure_synapse_server_admin_skips_when_already_admin(ctx: med_admin.Context) -> None:
+    with (
+        patch.object(med_admin, "user_has_synapse_server_admin", return_value=True),
+        patch.object(med_admin, "_invoke_create_account_admin") as mock_grant,
+    ):
+        med_admin.ensure_synapse_server_admin(ctx)
+
+    mock_grant.assert_not_called()
 
 
 def test_cmd_create_room_posts_client_api(ctx: med_admin.Context, capsys: pytest.CaptureFixture[str]) -> None:

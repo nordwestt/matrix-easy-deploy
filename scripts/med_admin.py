@@ -200,6 +200,7 @@ class Context:
                 f"Command '{command}' is not available for Tuwunel via Synapse HTTP admin API. "
                 "Tuwunel administration uses docker exec admin commands."
             )
+        ensure_synapse_server_admin(self)
 
     def prompt_for_auth_password(self) -> None:
         if self.auth_password:
@@ -317,6 +318,37 @@ class Context:
     def admin_api(self, method: str, endpoint: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._request_json(method=method, endpoint=endpoint, payload=payload, api_prefix="_synapse/admin")
 
+    def admin_api_status(
+        self, method: str, endpoint: str, payload: dict[str, Any] | None = None
+    ) -> tuple[int, dict[str, Any]]:
+        self.ensure_base_url()
+        token = self.get_admin_token()
+        data_bytes = json.dumps(payload).encode("utf-8") if payload is not None else None
+        req = urllib.request.Request(
+            f"{self.base_url}/_synapse/admin/{endpoint}",
+            data=data_bytes,
+            method=method,
+            headers={
+                "Authorization": f"Bearer {token}",
+                **({"Content-Type": "application/json"} if payload is not None else {}),
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8")
+                return resp.status, json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", errors="replace")
+            parsed: dict[str, Any] = {}
+            try:
+                parsed = json.loads(raw) if raw else {}
+            except Exception:
+                pass
+            return e.code, parsed
+        except Exception as e:
+            die(f"API request failed: {e}")
+        return 0, {}
+
     def client_api(
         self, method: str, endpoint: str, payload: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -359,6 +391,65 @@ def is_bootstrapped(ctx: Context) -> bool:
     username = env.get("MED_ADMIN_USERNAME", "").strip()
     password = env.get("MED_ADMIN_PASSWORD", "").strip()
     return bool(username and password)
+
+
+def _invoke_create_account_admin(ctx: Context, username: str, password: str) -> None:
+    create_cmd = [
+        "bash",
+        str(ctx.script_dir / "create-account.sh"),
+        "--username",
+        username,
+        "--password",
+        password,
+        "--admin",
+        "--yes",
+    ]
+    if ctx.base_url:
+        create_cmd += ["--base-url", ctx.base_url]
+    if ctx.shared_secret:
+        create_cmd += ["--shared-secret", ctx.shared_secret]
+
+    result = subprocess.run(create_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        msg = result.stderr.strip() or result.stdout.strip() or "create-account failed."
+        die(f"Could not grant Synapse server admin to '{username}': {msg}")
+
+
+def user_has_synapse_server_admin(ctx: Context) -> bool:
+    if ctx.is_tuwunel():
+        return True
+    ctx.ensure_base_url()
+    status, _ = ctx.admin_api_status("GET", "v2/users?limit=1")
+    return status == 200
+
+
+def ensure_synapse_server_admin(ctx: Context) -> None:
+    if ctx.is_tuwunel():
+        return
+    if user_has_synapse_server_admin(ctx):
+        return
+
+    username = (ctx.med_admin_username or ctx.auth_username or "").strip()
+    password = (ctx.med_admin_password or ctx.auth_password or "").strip()
+    if not username or not password:
+        die(
+            "The current credentials are not a Synapse server admin. "
+            "Pass --access-token from an admin account, or run "
+            "'bash scripts/med-admin.sh bootstrap --username med-admin --password <password>'."
+        )
+
+    info(
+        f"Account '{username}' can log in but lacks Synapse server admin privileges; "
+        "granting admin…"
+    )
+    ctx.access_token = ""
+    _invoke_create_account_admin(ctx, username, password)
+    if not user_has_synapse_server_admin(ctx):
+        die(
+            f"Account '{username}' still cannot use the Synapse admin API. "
+            "Ensure MAS_HOMESERVER_SECRET is set in .env, then run "
+            f"'bash scripts/med-admin.sh bootstrap --username {username} --password <password>'."
+        )
 
 
 def _reset_existing_user_password(ctx: Context, username: str, password: str) -> bool:
@@ -452,7 +543,7 @@ def run_bootstrap(ctx: Context, *, username: str = "med-admin", password: str | 
         if ctx.shared_secret:
             create_cmd += ["--shared-secret", ctx.shared_secret]
 
-        info(f"Creating admin account '{username}' via shared-secret registration…")
+        info(f"Creating admin account '{username}' via create-account.sh…")
         result = subprocess.run(create_cmd, capture_output=True, text=True)
         if result.returncode != 0:
             msg = result.stderr.strip() or result.stdout.strip() or "create-account failed."
@@ -478,6 +569,8 @@ def run_bootstrap(ctx: Context, *, username: str = "med-admin", password: str | 
     ctx.med_admin_password = password
     ctx.auth_username = username
     ctx.auth_password = password
+    ctx.access_token = ""
+    ensure_synapse_server_admin(ctx)
     success(f"Admin account '{username}' ready for admin operations.")
     success("Credentials stored in .env for automatic use by admin commands.")
 
