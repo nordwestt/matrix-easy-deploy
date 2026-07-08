@@ -657,6 +657,108 @@ def cmd_reset_password(ctx: Context, args: argparse.Namespace) -> None:
     success(f"Password reset for '{user_id}'.")
 
 
+def localpart_from_user_id(user_id: str) -> str:
+    return user_id.lstrip("@").split(":", 1)[0]
+
+
+def mas_auth_enabled(ctx: Context) -> bool:
+    env = load_env_file(ctx.env_path)
+    return (
+        env.get("MAS_ENABLED", "").strip().lower() == "true"
+        and env.get("SERVER_IMPLEMENTATION", "synapse").strip().lower() == "synapse"
+    )
+
+
+def deactivate_mas_user(ctx: Context, localpart: str) -> None:
+    info(f"Deactivating MAS account '{localpart}'…")
+    result = subprocess.run(
+        [
+            "docker",
+            "exec",
+            "matrix_mas",
+            "mas-cli",
+            "-c",
+            "/config/config.yaml",
+            "manage",
+            "lock-user",
+            localpart,
+            "--deactivate",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = (result.stderr or result.stdout or "").strip()
+    if result.returncode == 0:
+        success(f"MAS account '{localpart}' deactivated.")
+        return
+    if "not found" in output.lower() or "User not found" in output:
+        info(f"User '{localpart}' is not in MAS; skipping MAS deactivation.")
+        return
+    die(f"MAS deactivation failed: {output or 'unknown error'}")
+
+
+def clear_med_admin_env_credentials(ctx: Context, localpart: str) -> None:
+    env = load_env_file(ctx.env_path)
+    med_admin = env.get("MED_ADMIN_USERNAME", "").strip()
+    if med_admin and med_admin == localpart:
+        upsert_env_value(ctx.env_path, "MED_ADMIN_USERNAME", "")
+        upsert_env_value(ctx.env_path, "MED_ADMIN_PASSWORD", "")
+        warn("Removed stored med-admin credentials from .env (account was deleted).")
+
+
+def cmd_delete_account(ctx: Context, args: argparse.Namespace) -> None:
+    ctx.read_deploy_env()
+    ctx.ensure_server_name()
+    user_id = to_user_id(args.target, ctx.server_name)
+    localpart = localpart_from_user_id(user_id)
+    erase = not args.keep_data
+
+    if ctx.med_admin_username and localpart == ctx.med_admin_username and not args.yes:
+        die(
+            f"Refusing to delete operator account '{localpart}' without --yes. "
+            "Re-bootstrap afterwards with: bash scripts/med-admin.sh bootstrap"
+        )
+
+    if not args.yes:
+        print()
+        print(f"{BOLD}Delete account{RESET}")
+        print(f"  User ID:  {CYAN}{user_id}{RESET}")
+        print(f"  Erase:    {CYAN}{erase}{RESET}")
+        if mas_auth_enabled(ctx):
+            print(f"  MAS:      {CYAN}deactivate if present{RESET}")
+        if not ask_yn("Delete this account now?", "n"):
+            die("Aborted.")
+
+    if mas_auth_enabled(ctx):
+        deactivate_mas_user(ctx, localpart)
+
+    if ctx.is_tuwunel():
+        tuwunel_admin = _load_tuwunel_admin_module()
+        admin = tuwunel_admin.load_tuwunel_admin(ctx.env_path, project_root=ctx.repo_dir)
+        try:
+            admin.deactivate_user(user_id)
+        except tuwunel_admin.TuwunelAdminError as exc:
+            die(str(exc))
+        clear_med_admin_env_credentials(ctx, localpart)
+        success(f"Account '{user_id}' deleted.")
+        return
+
+    ctx.require_synapse_admin_api("delete-account")
+    ctx.ensure_base_url()
+    encoded = urllib.parse.quote(user_id, safe="")
+    ctx.admin_api(
+        "POST",
+        f"v1/deactivate/{encoded}",
+        {"erase": erase},
+    )
+    clear_med_admin_env_credentials(ctx, localpart)
+    if erase:
+        success(f"Account '{user_id}' deleted (erased). You can recreate it with create-account.sh.")
+    else:
+        success(f"Account '{user_id}' deactivated (data retained).")
+
+
 def _parse_invites(raw_invites: list[str], server_name: str) -> list[str]:
     users: list[str] = []
     for entry in raw_invites:
@@ -942,6 +1044,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  bash scripts/med-admin.sh list-admins [--filter alice] [--limit 100] [--from 0]\n"
             "  bash scripts/med-admin.sh get-account USERNAME_OR_MXID\n"
             "  bash scripts/med-admin.sh reset-password USERNAME_OR_MXID [--password 'new-long-secret'] [--yes]\n"
+            "  bash scripts/med-admin.sh delete-account USERNAME_OR_MXID [--keep-data] [--yes]\n"
             "  bash scripts/med-admin.sh create-room [--name 'Care Team'] [--alias care-team] [--topic 'Clinical coordination'] [--public|--private] [--invite USER_OR_MXID]... [--direct] [--yes]\n"
             "  bash scripts/med-admin.sh setup-auto-join-rooms [--deploy-yaml deploy.yaml] [--force-message] [--yes]"
         ),
@@ -976,6 +1079,14 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("reset-password")
     r.add_argument("target")
     r.add_argument("--password", default="")
+
+    d = sub.add_parser("delete-account")
+    d.add_argument("target")
+    d.add_argument(
+        "--keep-data",
+        action="store_true",
+        help="Deactivate only; do not erase the account (username cannot be reused).",
+    )
 
     c = sub.add_parser("create-room")
     c.add_argument("--name", default="")
@@ -1013,6 +1124,7 @@ def _reorder_argv_for_argparse(argv: list[str]) -> list[str]:
         "list-admins",
         "get-account",
         "reset-password",
+        "delete-account",
         "create-room",
         "setup-auto-join-rooms",
     }
@@ -1088,6 +1200,8 @@ def main(argv: list[str]) -> int:
         cmd_get_account(ctx, args)
     elif args.command == "reset-password":
         cmd_reset_password(ctx, args)
+    elif args.command == "delete-account":
+        cmd_delete_account(ctx, args)
     elif args.command == "create-room":
         args.visibility = "public" if args.public else "private" if args.private else ""
         cmd_create_room(ctx, args)

@@ -348,6 +348,64 @@ def test_cmd_reset_password_synapse_posts_admin_api(ctx: med_admin.Context) -> N
     assert "%40alice%3Aexample.com" in endpoint
 
 
+def test_cmd_delete_account_synapse_erases_user(ctx: med_admin.Context) -> None:
+    ctx.base_url = "https://matrix.example.com"
+    ctx.access_token = "tok-123"
+    args = argparse.Namespace(target="alice", keep_data=False, yes=True)
+
+    with patch.object(ctx, "admin_api") as mock_api, patch.object(med_admin, "mas_auth_enabled", return_value=False):
+        med_admin.cmd_delete_account(ctx, args)
+
+    endpoint = mock_api.call_args.args[1]
+    payload = mock_api.call_args.args[2]
+    assert endpoint.startswith("v1/deactivate/")
+    assert "%40alice%3Aexample.com" in endpoint
+    assert payload == {"erase": True}
+
+
+def test_cmd_delete_account_synapse_can_keep_data(ctx: med_admin.Context) -> None:
+    ctx.base_url = "https://matrix.example.com"
+    ctx.access_token = "tok-123"
+    args = argparse.Namespace(target="alice", keep_data=True, yes=True)
+
+    with patch.object(ctx, "admin_api") as mock_api, patch.object(med_admin, "mas_auth_enabled", return_value=False):
+        med_admin.cmd_delete_account(ctx, args)
+
+    assert mock_api.call_args.args[2] == {"erase": False}
+
+
+def test_cmd_delete_account_mas_calls_lock_user(ctx: med_admin.Context) -> None:
+    ctx.base_url = "https://matrix.example.com"
+    ctx.access_token = "tok-123"
+    args = argparse.Namespace(target="alice", keep_data=False, yes=True)
+
+    with (
+        patch.object(med_admin, "mas_auth_enabled", return_value=True),
+        patch.object(med_admin, "deactivate_mas_user") as mock_mas,
+        patch.object(ctx, "admin_api") as mock_api,
+    ):
+        med_admin.cmd_delete_account(ctx, args)
+
+    mock_mas.assert_called_once_with(ctx, "alice")
+    assert mock_api.call_args.args[2] == {"erase": True}
+
+
+def test_cmd_delete_account_tuwunel_deactivates_user(ctx: med_admin.Context) -> None:
+    ctx.env_path.write_text(
+        "SERVER_IMPLEMENTATION=tuwunel\n"
+        "SERVER_NAME=example.com\n"
+        "MATRIX_DOMAIN=matrix.example.com\n"
+    )
+    args = argparse.Namespace(target="alice", keep_data=False, yes=True)
+    mock_admin = MagicMock()
+
+    with patch("scripts.med_admin._load_tuwunel_admin_module") as mock_load:
+        mock_load.return_value.load_tuwunel_admin.return_value = mock_admin
+        med_admin.cmd_delete_account(ctx, args)
+
+    mock_admin.deactivate_user.assert_called_once_with("@alice:example.com")
+
+
 def test_cmd_create_room_posts_client_api(ctx: med_admin.Context, capsys: pytest.CaptureFixture[str]) -> None:
     ctx.base_url = "https://matrix.example.com"
     ctx.access_token = "tok-123"

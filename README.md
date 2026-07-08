@@ -876,6 +876,16 @@ bash scripts/med-admin.sh get-account alice
 bash scripts/med-admin.sh reset-password alice --password 'new-long-random-password' --yes
 ```
 
+**Delete a local account**
+
+Erases the Synapse user by default so the username can be recreated (for example after enabling MAS):
+
+```bash
+bash scripts/med-admin.sh delete-account alice --yes
+```
+
+On MAS deployments this also deactivates the MAS account when present. Use `--keep-data` to deactivate without erasing (the username stays reserved).
+
 **Create a room (interactive)**
 
 ```bash
