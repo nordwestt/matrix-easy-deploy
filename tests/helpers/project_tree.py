@@ -104,10 +104,24 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
         (root / "caddy/Caddyfile.template").write_text(
             "{{CADDY_MATRIX_HOSTS}} {\n"
             "{{CADDY_MAS_BLOCK}}"
-            "    reverse_proxy {{HOMESERVER_UPSTREAM}}\n"
+            "    handle /_matrix/* {\n"
+            "        reverse_proxy {{HOMESERVER_UPSTREAM}}\n"
+            "    }\n"
             "{{CADDY_SYNAPSE_ADMIN_BLOCK}}"
+            "    handle /.well-known/matrix/* {\n"
+            "        header Access-Control-Allow-Origin *\n"
+            "        reverse_proxy {{HOMESERVER_UPSTREAM}} {\n"
+            "            header_down -Access-Control-Allow-Origin\n"
+            "        }\n"
+            "    }\n"
+            "{{CADDY_ELEMENT_MATRIX_FALLBACK}}"
             "}\n\n"
             "{{LIVEKIT_DOMAIN}} {\n"
+            "    @jwt_service_url path_regexp ^/livekit/jwt/?$\n"
+            "    handle @jwt_service_url {\n"
+            "        rewrite * /healthz\n"
+            "        reverse_proxy matrix_lk_jwt_service:8080\n"
+            "    }\n"
             "    handle_path /livekit/jwt* {\n"
             "        reverse_proxy matrix_lk_jwt_service:8080\n"
             "    }\n"
@@ -130,11 +144,18 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "{{SYNAPSE_MAS_WELL_KNOWN_SECTION}}\n"
             "experimental_features:\n"
             "  msc3266_enabled: true\n"
+            "  msc4140_enabled: true\n"
+            "  msc4143_enabled: true\n"
+            "  msc4222_enabled: true\n"
             "{{SYNAPSE_MAS_EXPERIMENTAL_SECTION}}\n"
             "matrix_rtc:\n"
             "  transports:\n"
             "    - type: livekit\n"
             "      livekit_service_url: \"https://{{LIVEKIT_DOMAIN}}/livekit/jwt\"\n"
+            "max_event_delay_duration: 24h\n"
+            "rc_message:\n"
+            "  per_second: 0.5\n"
+            "  burst_count: 30\n"
         )
     else:
         (root / "caddy/Caddyfile.template").write_text("{{MATRIX_DOMAIN}} {{CADDY_MATRIX_HOSTS}}\n")
@@ -171,7 +192,11 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
     if full:
         livekit_template = (
             "room:\n  auto_create: false\n"
-            "keys:\n  {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}"
+            "keys:\n  {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}\n"
+            "webhook:\n"
+            "  api_key: {{LIVEKIT_KEY}}\n"
+            "  urls:\n"
+            '    - https://{{LIVEKIT_DOMAIN}}/livekit/jwt/sfu_webhook\n'
         )
     else:
         livekit_template = "keys:\n  {{LIVEKIT_KEY}}: {{LIVEKIT_SECRET}}\n"

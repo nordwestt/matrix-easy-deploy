@@ -1063,10 +1063,58 @@ def merge_element_customizations(base: dict, element_cfg: dict) -> dict:
     return merged
 
 
+def livekit_jwt_service_url(config: dict) -> str:
+    matrix = config.get("matrix", {}) if isinstance(config.get("matrix", {}), dict) else {}
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    matrix_domain = matrix.get("domain", "")
+    livekit_domain = calls.get("livekit_domain") or f"livekit.{extract_base_domain(matrix_domain)}"
+    return f"https://{livekit_domain}/livekit/jwt"
+
+
+DEFAULT_ELEMENT_CALL_URL = "https://call.element.io"
+
+# Labs flags Element Web needs to place MatrixRTC calls (legacy VoIP breaks Element X).
+ELEMENT_CALL_FEATURE_FLAGS = {
+    "feature_video_rooms": True,
+    "feature_group_calls": True,
+    "feature_element_call_video_rooms": True,
+}
+
+
+def apply_calls_element_config(target: dict, config: dict) -> None:
+    """Configure Element Web for MatrixRTC when the calls stack is enabled."""
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    if not calls.get("enabled", True):
+        return
+
+    rtc_foci = [
+        {
+            "type": "livekit",
+            "livekit_service_url": livekit_jwt_service_url(config),
+        }
+    ]
+    default_server = target.setdefault("default_server_config", {})
+    default_server["org.matrix.msc4143.rtc_foci"] = rtc_foci
+
+    element_call_url = str(calls.get("element_call_url") or DEFAULT_ELEMENT_CALL_URL).strip()
+    target["element_call"] = {
+        "url": element_call_url,
+        "use_exclusively": True,
+    }
+
+    element_features = target.setdefault("features", {})
+    for key, value in ELEMENT_CALL_FEATURE_FLAGS.items():
+        element_features[key] = value
+
+
 def build_element_config(config: dict) -> dict:
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
     element_cfg = features.get("element", {}) if isinstance(features.get("element"), dict) else {}
-    return merge_element_customizations(build_default_element_config(config), element_cfg)
+    merged = merge_element_customizations(build_default_element_config(config), element_cfg)
+    apply_calls_element_config(merged, config)
+    return merged
 
 
 def write_json(path: Path, data: dict) -> None:
@@ -1107,6 +1155,16 @@ def write_env_file(ctx: ApplyContext, env_vars: dict) -> None:
 
     ctx.env_file.write_text("\n".join(lines))
     ctx.env_file.chmod(0o600)
+
+
+def link_calls_compose_env(ctx: ApplyContext) -> None:
+    """Symlink modules/calls/.env → repo .env so docker compose picks up variables."""
+    calls_dir = ctx.project_root / "modules" / "calls"
+    calls_dir.mkdir(parents=True, exist_ok=True)
+    link = calls_dir / ".env"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to("../../.env")
 
 
 def render_template(src: Path, dest: Path, values: dict) -> None:
@@ -1670,6 +1728,7 @@ def apply_configuration(
     saved = create_or_update_secrets(ctx, existing, rotate=rotate_secrets, mas_enabled=mas_enabled)
     env_vars = build_env_vars(config, derived, saved)
     write_env_file(ctx, env_vars)
+    link_calls_compose_env(ctx)
     render_templates(ctx, config, env_vars)
     reconcile_module_state(ctx, config)
     if reconcile_modules:

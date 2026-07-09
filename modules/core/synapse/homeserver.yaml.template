@@ -152,6 +152,7 @@ extra_well_known_client_content:
 
 experimental_features:
   msc3266_enabled: true  # room summary API, required by Element Call
+  msc4140_enabled: true  # delayed events; required for MatrixRTC call signalling
   msc4143_enabled: true
   msc4222_enabled: true
   msc3202_device_masquerading: true
@@ -164,6 +165,17 @@ matrix_rtc:
   transports:
     - type: livekit
       livekit_service_url: "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
+
+# MSC4140 delayed events — required for MatrixRTC call signalling (Element Call / Element X).
+max_event_delay_duration: 24h
+
+rc_message:
+  per_second: 0.5
+  burst_count: 30
+
+rc_delayed_event_mgmt:
+  per_second: 1
+  burst_count: 20
 
 # ----------------------------------------------------------------------------
 # Modules (bridges, bots, spam checkers…)

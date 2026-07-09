@@ -9,9 +9,12 @@
         reverse_proxy {{HOMESERVER_UPSTREAM}}
     }
 {{CADDY_SYNAPSE_ADMIN_BLOCK}}
-    # Well-known for Matrix federation & client autodiscovery
+    # Well-known: CORS for Element X; strip Synapse duplicate to avoid "*, *".
     handle /.well-known/matrix/* {
-        reverse_proxy {{HOMESERVER_UPSTREAM}}
+        header Access-Control-Allow-Origin *
+        reverse_proxy {{HOMESERVER_UPSTREAM}} {
+            header_down -Access-Control-Allow-Origin
+        }
     }
 {{CADDY_ELEMENT_MATRIX_FALLBACK}}
     # Security headers
@@ -29,15 +32,25 @@
 
 # MatrixRTC backend — JWT auth service and LiveKit SFU for group calls
 {{LIVEKIT_DOMAIN}} {
-    handle /livekit/jwt* {
+    # Element Call probes livekit_service_url without /healthz.
+    @jwt_service_url path_regexp ^/livekit/jwt/?$
+    handle @jwt_service_url {
+        rewrite * /healthz
         reverse_proxy matrix_lk_jwt_service:8080
     }
 
-    handle /livekit/sfu* {
+    handle_path /livekit/jwt* {
+        reverse_proxy matrix_lk_jwt_service:8080
+    }
+
+    handle_path /livekit/sfu* {
         reverse_proxy host.docker.internal:7880
     }
 
     header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Access-Control-Allow-Headers "Authorization, Content-Type"
         X-Content-Type-Options nosniff
         X-Frame-Options SAMEORIGIN
         Referrer-Policy strict-origin-when-cross-origin

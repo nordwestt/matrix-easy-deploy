@@ -62,6 +62,9 @@ features:
   calls:
     enabled: true
     livekit_domain: livekit.example.com
+    # Element Call SPA used by Element Web for outbound MatrixRTC calls.
+    # Defaults to https://call.element.io; your LiveKit backend comes from rtc_foci.
+    # element_call_url: https://call.element.io
   local_login_enabled: true
   sso:
     enabled: false

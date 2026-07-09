@@ -1,3 +1,4 @@
+# Compose env: modules/calls/.env is symlinked to ../../.env by apply.sh.
 services:
   coturn:
     image: coturn/coturn:latest
@@ -29,6 +30,10 @@ services:
       LIVEKIT_KEY: ${LIVEKIT_KEY}
       LIVEKIT_SECRET: ${LIVEKIT_SECRET}
       LIVEKIT_FULL_ACCESS_HOMESERVERS: ${SERVER_NAME}
+      LIVEKIT_CS_API_URL_OVERRIDES: ${SERVER_NAME}=https://${MATRIX_DOMAIN}
+    extra_hosts:
+      "${SERVER_NAME}": "host-gateway"
+      "${MATRIX_DOMAIN}": "host-gateway"
     depends_on:
       - livekit
     networks:
