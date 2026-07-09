@@ -1181,7 +1181,7 @@ Re-run `bash apply.sh` and restart Caddy so the JWT service root path is proxied
 
 **Duplicate CORS on `.well-known/matrix/client`**
 
-If both Synapse and Caddy add `Access-Control-Allow-Origin`, browsers see `*, *` and reject the response. Element X's call WebView then cannot read `rtc_foci` and shows `MISSING_MATRIX_RTC_TRANSPORT`. This stack deduplicates the header in Caddy. Verify you see only one value:
+If both Synapse and Caddy add `Access-Control-Allow-Origin`, browsers see `*, *` and reject the response. Caddy sets a single header and strips Synapse's upstream copy via `header_down`.
 
 ```bash
 curl -sSI "https://example.com/.well-known/matrix/client" | grep -i access-control-allow-origin

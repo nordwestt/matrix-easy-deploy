@@ -490,7 +490,8 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("handle_path /livekit/jwt*", caddy)
         self.assertIn("reverse_proxy matrix_lk_jwt_service:8080", caddy)
         self.assertIn("handle_path /livekit/sfu*", caddy)
-        self.assertIn("-Access-Control-Allow-Origin", caddy)
+        self.assertIn("header Access-Control-Allow-Origin *", caddy)
+        self.assertIn("header_down -Access-Control-Allow-Origin", caddy)
         self.assertNotIn("{{", caddy)
 
         synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()

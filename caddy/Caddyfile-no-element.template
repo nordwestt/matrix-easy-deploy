@@ -12,12 +12,11 @@
     }
 {{CADDY_SYNAPSE_ADMIN_BLOCK}}
     # Well-known for Matrix federation & client autodiscovery
-    # Synapse also sets Access-Control-Allow-Origin; dedupe so browsers see a single value.
+    # Element X needs CORS on client well-known; strip Synapse's copy to avoid "*, *".
     handle /.well-known/matrix/* {
-        reverse_proxy {{HOMESERVER_UPSTREAM}}
-        header {
-            -Access-Control-Allow-Origin
-            Access-Control-Allow-Origin *
+        header Access-Control-Allow-Origin *
+        reverse_proxy {{HOMESERVER_UPSTREAM}} {
+            header_down -Access-Control-Allow-Origin
         }
     }
 
