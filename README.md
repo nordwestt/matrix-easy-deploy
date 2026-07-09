@@ -1140,34 +1140,6 @@ curl -I https://livekit.example.com
 ```
 Also make sure port range 50000–50100/UDP is open in your firewall.
 
-**Element X / MatrixRTC calls**
-
-Element X only supports MatrixRTC (LiveKit), not legacy Synapse VoIP (`m.call.*`). After `apply.sh`, Element Web uses MatrixRTC exclusively with the required labs feature flags — hard-refresh the browser (Ctrl+Shift+R) after apply. Web→app calls fail with "Unsupported call" when Element Web still places legacy VoIP.
-
-Quick checks when calls fail:
-
-```bash
-# rtc_foci advertised on SERVER_NAME
-curl -sS "https://example.com/.well-known/matrix/client" | jq '.["org.matrix.msc4143.rtc_foci"]'
-
-# Exactly one CORS header (Element X WebView requirement)
-curl -sSI "https://example.com/.well-known/matrix/client" | grep -i access-control-allow-origin
-
-# JWT service URL must return 200 (Element Call probes this path directly)
-curl -sSI "https://livekit.example.com/livekit/jwt" | head -1
-
-# MSC4140 delayed events enabled
-curl -sS "https://matrix.example.com/_matrix/client/versions" | jq '.unstable_features["org.matrix.msc4140"]'
-```
-
-| Error | Typical cause |
-|-------|----------------|
-| Unsupported call | Element Web using legacy VoIP instead of MatrixRTC |
-| MISSING_MATRIX_RTC_TRANSPORT | JWT URL not reachable, duplicate/missing CORS on well-known, or MSC4140 disabled — re-run `apply.sh`, restart Caddy and Synapse |
-| OPEN_ID_ERROR | lk-jwt-service cannot validate OpenID with Synapse — check `docker logs matrix_lk_jwt_service` |
-
-A `401` on `/_matrix/client/unstable/org.matrix.msc4143/rtc/transports` without a token is expected; Element X falls back to well-known.
-
 **1:1 calls fail or audio/video cuts out**
 
 This is almost always a TURN / NAT traversal issue. Check that ports 3478 and 5349 (as well as the UDP relay range 49152–49400) are open in your firewall or VPS security group. Verify coturn is running:
