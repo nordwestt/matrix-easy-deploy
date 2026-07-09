@@ -1072,6 +1072,16 @@ def livekit_jwt_service_url(config: dict) -> str:
     return f"https://{livekit_domain}/livekit/jwt"
 
 
+DEFAULT_ELEMENT_CALL_URL = "https://call.element.io"
+
+# Labs flags Element Web needs to place MatrixRTC calls (legacy VoIP breaks Element X).
+ELEMENT_CALL_FEATURE_FLAGS = {
+    "feature_video_rooms": True,
+    "feature_group_calls": True,
+    "feature_element_call_video_rooms": True,
+}
+
+
 def apply_calls_element_config(target: dict, config: dict) -> None:
     """Configure Element Web for MatrixRTC when the calls stack is enabled."""
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
@@ -1086,10 +1096,17 @@ def apply_calls_element_config(target: dict, config: dict) -> None:
         }
     ]
     default_server = target.setdefault("default_server_config", {})
-    default_server.setdefault("org.matrix.msc4143.rtc_foci", rtc_foci)
+    default_server["org.matrix.msc4143.rtc_foci"] = rtc_foci
 
-    element_call = target.setdefault("element_call", {})
-    element_call.setdefault("use_exclusively", True)
+    element_call_url = str(calls.get("element_call_url") or DEFAULT_ELEMENT_CALL_URL).strip()
+    target["element_call"] = {
+        "url": element_call_url,
+        "use_exclusively": True,
+    }
+
+    element_features = target.setdefault("features", {})
+    for key, value in ELEMENT_CALL_FEATURE_FLAGS.items():
+        element_features[key] = value
 
 
 def build_element_config(config: dict) -> dict:

@@ -522,6 +522,10 @@ class ApplyTests(unittest.TestCase):
             [{"type": "livekit", "livekit_service_url": "https://livekit.example.com/livekit/jwt"}],
         )
         self.assertTrue(element["element_call"]["use_exclusively"])
+        self.assertEqual(element["element_call"]["url"], "https://call.element.io")
+        self.assertTrue(element["features"]["feature_group_calls"])
+        self.assertTrue(element["features"]["feature_video_rooms"])
+        self.assertTrue(element["features"]["feature_element_call_video_rooms"])
         self.assertEqual(element["room_directory"]["servers"], ["example.com"])
         self.assertEqual(element["integrations_ui_url"], "https://scalar.vector.im/")
         self.assertIn("SERVER_IMPLEMENTATION=synapse", env_text)
@@ -627,7 +631,14 @@ class ApplyTests(unittest.TestCase):
         self.assertIsNone(element["integrations_rest_url"])
         self.assertIsNone(element["integrations_widgets_urls"])
         self.assertTrue(element["show_labs_settings"])
-        self.assertEqual(element["features"], {"feature_video_rooms": True})
+        self.assertEqual(
+            element["features"],
+            {
+                "feature_video_rooms": True,
+                "feature_group_calls": True,
+                "feature_element_call_video_rooms": True,
+            },
+        )
         self.assertFalse(element["setting_defaults"]["UIFeature.registration"])
         self.assertFalse(element["setting_defaults"]["UIFeature.passwordReset"])
         self.assertFalse(element["setting_defaults"]["UIFeature.allowCreatingPublicRooms"])
@@ -649,6 +660,18 @@ class ApplyTests(unittest.TestCase):
         element = json.loads((self.root / "modules/core/element/config.json").read_text())
         self.assertNotIn("org.matrix.msc4143.rtc_foci", element.get("default_server_config", {}))
         self.assertNotIn("element_call", element)
+        self.assertNotIn("feature_group_calls", element.get("features", {}))
+
+    def test_apply_calls_element_config_overrides_legacy_element_call_settings(self):
+        cfg = self.sample_config()
+        cfg["features"]["element"]["extra_config"] = {
+            "element_call": {"use_exclusively": False, "disabled": True},
+            "features": {"feature_group_calls": False},
+        }
+        merged = apply.build_element_config(cfg)
+        self.assertTrue(merged["element_call"]["use_exclusively"])
+        self.assertEqual(merged["element_call"]["url"], "https://call.element.io")
+        self.assertTrue(merged["features"]["feature_group_calls"])
 
     def test_apply_configuration_renders_custom_integrations_override(self):
         cfg = self.sample_config()

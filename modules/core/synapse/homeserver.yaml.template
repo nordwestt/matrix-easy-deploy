@@ -169,6 +169,10 @@ matrix_rtc:
 # MSC4140 delayed events — required for MatrixRTC call signalling (Element Call / Element X).
 max_event_delay_duration: 24h
 
+rc_message:
+  per_second: 0.5
+  burst_count: 30
+
 rc_delayed_event_mgmt:
   per_second: 1
   burst_count: 20

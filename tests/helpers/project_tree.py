@@ -153,6 +153,9 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "    - type: livekit\n"
             "      livekit_service_url: \"https://{{LIVEKIT_DOMAIN}}/livekit/jwt\"\n"
             "max_event_delay_duration: 24h\n"
+            "rc_message:\n"
+            "  per_second: 0.5\n"
+            "  burst_count: 30\n"
         )
     else:
         (root / "caddy/Caddyfile.template").write_text("{{MATRIX_DOMAIN}} {{CADDY_MATRIX_HOSTS}}\n")

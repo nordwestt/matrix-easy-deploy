@@ -1142,7 +1142,7 @@ Also make sure port range 50000–50100/UDP is open in your firewall.
 
 **Element X / MatrixRTC calls**
 
-Element X only supports MatrixRTC (LiveKit), not legacy Synapse VoIP (`m.call.*`). After `apply.sh`, Element Web is configured with `element_call.use_exclusively` — hard-refresh or restart the desktop app if Element Web still offers legacy calls.
+Element X only supports MatrixRTC (LiveKit), not legacy Synapse VoIP (`m.call.*`). After `apply.sh`, Element Web uses MatrixRTC exclusively with the required labs feature flags — hard-refresh the browser (Ctrl+Shift+R) after apply. Web→app calls fail with "Unsupported call" when Element Web still places legacy VoIP.
 
 Quick checks when calls fail:
 
