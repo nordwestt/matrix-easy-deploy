@@ -876,16 +876,6 @@ bash scripts/med-admin.sh get-account alice
 bash scripts/med-admin.sh reset-password alice --password 'new-long-random-password' --yes
 ```
 
-**Delete a local account**
-
-Erases the Synapse user by default so the username can be recreated (for example after enabling MAS):
-
-```bash
-bash scripts/med-admin.sh delete-account alice --yes
-```
-
-On MAS deployments this also deactivates the MAS account when present. Use `--keep-data` to deactivate without erasing (the username stays reserved).
-
 **Create a room (interactive)**
 
 ```bash
@@ -1150,87 +1140,33 @@ curl -I https://livekit.example.com
 ```
 Also make sure port range 50000–50100/UDP is open in your firewall.
 
-Verify MatrixRTC discovery is exposed on your server name (not only the matrix subdomain):
+**Element X / MatrixRTC calls**
+
+Element X only supports MatrixRTC (LiveKit), not legacy Synapse VoIP (`m.call.*`). After `apply.sh`, Element Web is configured with `element_call.use_exclusively` — hard-refresh or restart the desktop app if Element Web still offers legacy calls.
+
+Quick checks when calls fail:
+
 ```bash
+# rtc_foci advertised on SERVER_NAME
 curl -sS "https://example.com/.well-known/matrix/client" | jq '.["org.matrix.msc4143.rtc_foci"]'
-```
-You should see a LiveKit JWT service URL such as `https://livekit.example.com/livekit/jwt`.
 
-**Element X shows "Unsupported call" for incoming Element Web calls**
-
-Element X only supports MatrixRTC (LiveKit-backed) calls, not legacy Synapse VoIP (`m.call.*`). If Element Web still offers legacy calling, Element X users will see this error.
-
-After `bash apply.sh`, Element Web is configured with `element_call.use_exclusively` so calls use MatrixRTC. Hard-refresh Element Web (or restart the desktop app) after apply. If you overrode `features.element.extra_config`, ensure you did not re-enable legacy VoIP there.
-
-**Element X shows "MISSING_MATRIX_RTC_TRANSPORT" when starting a call**
-
-Element X discovered your `org.matrix.msc4143.rtc_foci` entry but rejected the LiveKit JWT service URL. After reading `.well-known/matrix/client`, Element Call probes the advertised `livekit_service_url` itself (not only `/healthz`). If that URL returns 404, the call fails immediately.
-
-Verify:
-
-```bash
-# Must be HTTP 200 (lk-jwt-service health check via Caddy)
-curl -sSI "https://livekit.example.com/livekit/jwt" | head -1
-curl -sSI "https://livekit.example.com/livekit/jwt/healthz" | head -1
-
-# Must include rtc_foci
-curl -sS "https://example.com/.well-known/matrix/client" | jq '.["org.matrix.msc4143.rtc_foci"]'
-```
-
-Re-run `bash apply.sh` and restart Caddy so the JWT service root path is proxied to `/healthz`. A `401` on `/_matrix/client/unstable/org.matrix.msc4143/rtc/transports` without a token is normal; Element X falls back to well-known.
-
-**Duplicate CORS on `.well-known/matrix/client`**
-
-If both Synapse and Caddy add `Access-Control-Allow-Origin`, browsers see `*, *` and reject the response. Caddy sets a single header and strips Synapse's upstream copy via `header_down`.
-
-```bash
+# Exactly one CORS header (Element X WebView requirement)
 curl -sSI "https://example.com/.well-known/matrix/client" | grep -i access-control-allow-origin
-```
 
-**MSC4140 (delayed events) must be enabled**
+# JWT service URL must return 200 (Element Call probes this path directly)
+curl -sSI "https://livekit.example.com/livekit/jwt" | head -1
 
-Element Call requires delayed events. After `apply.sh`, confirm Synapse advertises the feature and restart Synapse if needed:
-
-```bash
+# MSC4140 delayed events enabled
 curl -sS "https://matrix.example.com/_matrix/client/versions" | jq '.unstable_features["org.matrix.msc4140"]'
-# must print: true
 ```
 
-If it prints `false`, check `modules/core/synapse/homeserver.yaml` contains `msc4140_enabled: true` and `max_event_delay_duration: 24h`, then `docker restart matrix_synapse`.
+| Error | Typical cause |
+|-------|----------------|
+| Unsupported call | Element Web using legacy VoIP instead of MatrixRTC |
+| MISSING_MATRIX_RTC_TRANSPORT | JWT URL not reachable, duplicate/missing CORS on well-known, or MSC4140 disabled — re-run `apply.sh`, restart Caddy and Synapse |
+| OPEN_ID_ERROR | lk-jwt-service cannot validate OpenID with Synapse — check `docker logs matrix_lk_jwt_service` |
 
-**Element X shows "OPEN_ID_ERROR" when starting a call**
-
-The LiveKit JWT service (`matrix_lk_jwt_service`) could not validate the caller's Matrix OpenID token against your homeserver. Common causes:
-
-1. **JWT path routing** — Caddy must strip the `/livekit/jwt` prefix before proxying to lk-jwt-service (`handle_path`, not plain `handle`). Re-run `bash apply.sh` and reload Caddy if you upgraded from an older config.
-2. **Hairpin NAT** — If the server cannot reach its own public HTTPS URL from inside Docker, OpenID lookup times out. `modules/calls/docker-compose.yml` maps `SERVER_NAME` and `MATRIX_DOMAIN` to `host-gateway` for lk-jwt-service; ensure both DNS names resolve to this host.
-3. **Discovery / CORS** — Element X fetches `org.matrix.msc4143.rtc_foci` from `/.well-known/matrix/client` on `SERVER_NAME`; that response needs `Access-Control-Allow-Origin` (set by Caddy in this stack).
-
-To recreate the JWT service after config changes, run from the repo root (or use `bash start.sh`):
-
-```bash
-cd modules/calls && docker compose up -d --force-recreate lk-jwt-service
-```
-
-`apply.sh` symlinks `modules/calls/.env` to the repo `.env` so Compose can substitute variables. If you run Compose from elsewhere, pass `--env-file .env` explicitly.
-
-Diagnostics:
-
-```bash
-# JWT service health (should return {"status":"ok"} or similar)
-curl -sS "https://livekit.example.com/livekit/jwt/healthz"
-
-# Federation discovery used for OpenID userinfo lookup
-curl -sS "https://example.com/.well-known/matrix/server"
-
-# CORS on client discovery (needed for Element X)
-curl -sSI "https://example.com/.well-known/matrix/client" | grep -i access-control
-
-# lk-jwt-service logs during a failed call attempt
-docker logs matrix_lk_jwt_service --tail 50
-```
-
-Look for `Failed to look up user info` or timeouts in the JWT service logs.
+A `401` on `/_matrix/client/unstable/org.matrix.msc4143/rtc/transports` without a token is expected; Element X falls back to well-known.
 
 **1:1 calls fail or audio/video cuts out**
 

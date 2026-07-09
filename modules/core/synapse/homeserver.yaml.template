@@ -21,7 +21,7 @@ listeners:
     bind_addresses:
       - "0.0.0.0"
     resources:
-      - names: [client, federation, openid]
+      - names: [client, federation]
         compress: false
 
 # Database — PostgreSQL (recommended for production).

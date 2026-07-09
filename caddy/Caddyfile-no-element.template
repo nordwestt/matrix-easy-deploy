@@ -11,8 +11,7 @@
         reverse_proxy {{HOMESERVER_UPSTREAM}}
     }
 {{CADDY_SYNAPSE_ADMIN_BLOCK}}
-    # Well-known for Matrix federation & client autodiscovery
-    # Element X needs CORS on client well-known; strip Synapse's copy to avoid "*, *".
+    # Well-known: CORS for Element X; strip Synapse duplicate to avoid "*, *".
     handle /.well-known/matrix/* {
         header Access-Control-Allow-Origin *
         reverse_proxy {{HOMESERVER_UPSTREAM}} {
@@ -40,7 +39,7 @@
 
 # MatrixRTC backend — JWT auth service and LiveKit SFU for group calls
 {{LIVEKIT_DOMAIN}} {
-    # Element X / Element Call probe livekit_service_url itself (no /healthz suffix).
+    # Element Call probes livekit_service_url without /healthz.
     @jwt_service_url path_regexp ^/livekit/jwt/?$
     handle @jwt_service_url {
         rewrite * /healthz

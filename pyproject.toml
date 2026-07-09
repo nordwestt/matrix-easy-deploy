@@ -34,7 +34,6 @@ filterwarnings = [
 markers = [
     "integration: invokes bash/subprocess against copied scripts",
     "slow: tests that take >1s or spin up mock servers",
-    "synapse_admin_check: run real ensure_synapse_server_admin logic in med_admin tests",
 ]
 
 [tool.coverage.run]

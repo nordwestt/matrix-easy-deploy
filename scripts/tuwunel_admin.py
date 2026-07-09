@@ -138,10 +138,6 @@ class TuwunelAdmin:
         localpart = username.lstrip("@").split(":", 1)[0]
         return self._execute_offline(f"users reset-password {localpart} {password}")
 
-    def deactivate_user(self, user_id: str) -> str:
-        localpart = user_id.lstrip("@").split(":", 1)[0]
-        return self._execute_offline(f"users deactivate {localpart}")
-
     def list_users(self) -> list[str]:
         output = self._execute_offline("users list")
         match = re.search(r"```\n(.*?)```", output, re.S)
