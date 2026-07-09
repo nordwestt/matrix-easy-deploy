@@ -109,8 +109,11 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "    }\n"
             "{{CADDY_SYNAPSE_ADMIN_BLOCK}}"
             "    handle /.well-known/matrix/* {\n"
-            "        header Access-Control-Allow-Origin *\n"
             "        reverse_proxy {{HOMESERVER_UPSTREAM}}\n"
+            "        header {\n"
+            "            -Access-Control-Allow-Origin\n"
+            "            Access-Control-Allow-Origin *\n"
+            "        }\n"
             "    }\n"
             "{{CADDY_ELEMENT_MATRIX_FALLBACK}}"
             "}\n\n"
@@ -150,6 +153,7 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "  transports:\n"
             "    - type: livekit\n"
             "      livekit_service_url: \"https://{{LIVEKIT_DOMAIN}}/livekit/jwt\"\n"
+            "max_event_delay_duration: 24h\n"
         )
     else:
         (root / "caddy/Caddyfile.template").write_text("{{MATRIX_DOMAIN}} {{CADDY_MATRIX_HOSTS}}\n")

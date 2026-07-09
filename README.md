@@ -1179,6 +1179,25 @@ curl -sS "https://example.com/.well-known/matrix/client" | jq '.["org.matrix.msc
 
 Re-run `bash apply.sh` and restart Caddy so the JWT service root path is proxied to `/healthz`. A `401` on `/_matrix/client/unstable/org.matrix.msc4143/rtc/transports` without a token is normal; Element X falls back to well-known.
 
+**Duplicate CORS on `.well-known/matrix/client`**
+
+If both Synapse and Caddy add `Access-Control-Allow-Origin`, browsers see `*, *` and reject the response. Element X's call WebView then cannot read `rtc_foci` and shows `MISSING_MATRIX_RTC_TRANSPORT`. This stack deduplicates the header in Caddy. Verify you see only one value:
+
+```bash
+curl -sSI "https://example.com/.well-known/matrix/client" | grep -i access-control-allow-origin
+```
+
+**MSC4140 (delayed events) must be enabled**
+
+Element Call requires delayed events. After `apply.sh`, confirm Synapse advertises the feature and restart Synapse if needed:
+
+```bash
+curl -sS "https://matrix.example.com/_matrix/client/versions" | jq '.unstable_features["org.matrix.msc4140"]'
+# must print: true
+```
+
+If it prints `false`, check `modules/core/synapse/homeserver.yaml` contains `msc4140_enabled: true` and `max_event_delay_duration: 24h`, then `docker restart matrix_synapse`.
+
 **Element X shows "OPEN_ID_ERROR" when starting a call**
 
 The LiveKit JWT service (`matrix_lk_jwt_service`) could not validate the caller's Matrix OpenID token against your homeserver. Common causes:

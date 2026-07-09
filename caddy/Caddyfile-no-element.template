@@ -12,10 +12,13 @@
     }
 {{CADDY_SYNAPSE_ADMIN_BLOCK}}
     # Well-known for Matrix federation & client autodiscovery
-    # CORS is required for Element X / embedded call WebViews fetching rtc_foci.
+    # Synapse also sets Access-Control-Allow-Origin; dedupe so browsers see a single value.
     handle /.well-known/matrix/* {
-        header Access-Control-Allow-Origin *
         reverse_proxy {{HOMESERVER_UPSTREAM}}
+        header {
+            -Access-Control-Allow-Origin
+            Access-Control-Allow-Origin *
+        }
     }
 
     # Redirect visitors to the hosted Element client pre-pointed at this server
@@ -54,6 +57,9 @@
     }
 
     header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Access-Control-Allow-Headers "Authorization, Content-Type"
         X-Content-Type-Options nosniff
         X-Frame-Options SAMEORIGIN
         Referrer-Policy strict-origin-when-cross-origin

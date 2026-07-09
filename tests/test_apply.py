@@ -490,7 +490,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("handle_path /livekit/jwt*", caddy)
         self.assertIn("reverse_proxy matrix_lk_jwt_service:8080", caddy)
         self.assertIn("handle_path /livekit/sfu*", caddy)
-        self.assertIn("Access-Control-Allow-Origin", caddy)
+        self.assertIn("-Access-Control-Allow-Origin", caddy)
         self.assertNotIn("{{", caddy)
 
         synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
@@ -499,6 +499,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("extra_well_known_client_content:", synapse)
         self.assertIn("org.matrix.msc4143.rtc_foci:", synapse)
         self.assertIn("msc4140_enabled: true", synapse)
+        self.assertIn("max_event_delay_duration: 24h", synapse)
         self.assertIn("matrix_rtc:", synapse)
         self.assertIn('livekit_service_url: "https://livekit.example.com/livekit/jwt"', synapse)
         self.assertNotIn("\nlivekit:\n", synapse)
