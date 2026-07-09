@@ -39,9 +39,10 @@
 # MatrixRTC backend — JWT auth service and LiveKit SFU for group calls
 {{LIVEKIT_DOMAIN}} {
     # Element X / Element Call probe livekit_service_url itself (no /healthz suffix).
-    @jwt_service_url path /livekit/jwt /livekit/jwt/
+    @jwt_service_url path_regexp ^/livekit/jwt/?$
     handle @jwt_service_url {
-        reverse_proxy matrix_lk_jwt_service:8080/healthz
+        rewrite * /healthz
+        reverse_proxy matrix_lk_jwt_service:8080
     }
 
     handle_path /livekit/jwt* {
