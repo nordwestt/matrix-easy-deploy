@@ -39,7 +39,8 @@ elif [[ "${MAS_ENABLED:-false}" == "true" ]]; then
 fi
 
 info "Starting calls services (coturn + LiveKit)…"
-(cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" up -d)
+build_calls_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" up -d)
 
 # Start Hookshot if it was installed as a module
 if [[ "${HOOKSHOT_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/hookshot/hookshot/config.yml" ]]; then

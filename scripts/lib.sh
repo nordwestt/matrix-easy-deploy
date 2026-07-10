@@ -259,9 +259,25 @@ build_core_compose_stop_profiles() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Homeserver data directory permissions
-# ---------------------------------------------------------------------------
+# Compose file list and profiles for modules/calls (coturn, LiveKit, optional guest stack).
+build_calls_compose_args() {
+    CALLS_COMPOSE_ARGS=(-f docker-compose.yml)
+    if [[ -f "${1}/modules/calls/docker-compose.guest.yml" ]]; then
+        CALLS_COMPOSE_ARGS+=(-f docker-compose.guest.yml)
+    fi
+    if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
+        CALLS_COMPOSE_ARGS+=(--profile guest-calls)
+    fi
+}
+
+ensure_guest_tuwunel_data_permissions() {
+    local project_root="$1"
+    local guest_data_dir="${project_root}/modules/calls/guest/tuwunel_data"
+
+    mkdir -p "$guest_data_dir"
+    chmod -R a+rwX "$guest_data_dir" 2>/dev/null || true
+}
+
 ensure_homeserver_data_permissions() {
     local project_root="$1"
     local implementation="synapse"
@@ -279,6 +295,10 @@ ensure_homeserver_data_permissions() {
             ensure_synapse_data_permissions "$project_root"
             ;;
     esac
+
+    if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
+        ensure_guest_tuwunel_data_permissions "$project_root"
+    fi
 }
 
 ensure_tuwunel_data_permissions() {

@@ -580,6 +580,41 @@ Notes:
 - To disable Scalar integrations entirely, set `features.element.integrations.enabled: false`.
 - For less common Element settings, use `features.element.extra_config` to merge raw config into the generated JSON.
 
+### Element Call guest access (optional)
+
+Enable shareable meeting links for people without Matrix accounts (like Google Meet). This deploys a lightweight guest Tuwunel homeserver and a self-hosted [Element Call](https://github.com/element-hq/element-call) SPA, reusing your existing LiveKit stack.
+
+Requirements:
+- `features.calls.enabled: true`
+- `features.federation_enabled: true` (guests join main-server rooms via federation)
+- `features.registration_enabled: false` on the main server (guest registration happens on the isolated guest server only)
+
+Example:
+
+```yaml
+features:
+  calls:
+    enabled: true
+    livekit_domain: livekit.example.com
+    guest_access:
+      enabled: true
+      domain: call.example.com              # default: call.{base_domain}
+      server_name: guest.example.com        # default: guest.{base_domain}
+      matrix_domain: matrix.guest.example.com
+```
+
+When enabled, Element Web uses your self-hosted Element Call URL for both registered users and guests (`element_call.url` and `guest_spa_url`). Guest accounts get MXIDs like `@alice:guest.example.com`.
+
+DNS records (all pointing at your VPS):
+
+| Host | Purpose |
+|------|---------|
+| `call.example.com` | Element Call SPA (meeting links) |
+| `matrix.guest.example.com` | Guest Tuwunel client API |
+| `guest.example.com` | Guest `SERVER_NAME` / well-known |
+
+Note: if your main homeserver is Tuwunel, call reliability may be reduced because Tuwunel lacks MSC4140 delayed events on the principal server. Synapse main + guest Tuwunel is the recommended combination.
+
 ### Important: `MATRIX_DOMAIN` vs `SERVER_NAME`
 
 - `MATRIX_DOMAIN` is where the homeserver API is hosted (for example `matrix.example.com`).
@@ -1139,6 +1174,17 @@ docker logs matrix_livekit
 curl -I https://livekit.example.com
 ```
 Also make sure port range 50000–50100/UDP is open in your firewall.
+
+**External guests cannot join Element Call links**
+
+When `features.calls.guest_access.enabled` is true, verify the guest stack is running:
+```bash
+docker logs matrix_guest_tuwunel
+docker logs matrix_element_call
+curl -I https://call.example.com
+curl -I https://matrix.guest.example.com/_matrix/client/versions
+```
+Guest access requires federation on the main server and DNS for the Element Call domain, guest Matrix API domain, and guest `SERVER_NAME`. The guest Tuwunel server federates only with your main homeserver.
 
 **1:1 calls fail or audio/video cuts out**
 

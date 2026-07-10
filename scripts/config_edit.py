@@ -40,7 +40,7 @@ def load_or_init(path: Path) -> dict:
                 "federation_enabled": True,
                 "local_login_enabled": True,
                 "element": {"enabled": True, "domain": "element.example.com"},
-                "calls": {"enabled": True, "livekit_domain": "livekit.example.com"},
+                "calls": {"enabled": True, "livekit_domain": "livekit.example.com", "guest_access": {"enabled": False}},
                 "sso": {"enabled": False, "providers": []},
                 "auto_join": {
                     "rooms": [],
@@ -157,6 +157,10 @@ def update_core_config(
     calls_enabled: bool,
     livekit_domain: str,
     local_login_enabled: bool | None = None,
+    guest_access_enabled: bool | None = None,
+    guest_call_domain: str | None = None,
+    guest_server_name: str | None = None,
+    guest_matrix_domain: str | None = None,
 ) -> None:
     matrix = config.setdefault("matrix", {})
     if not isinstance(matrix, dict):
@@ -200,6 +204,40 @@ def update_core_config(
         features["calls"] = calls
     calls["enabled"] = bool(calls_enabled)
     calls["livekit_domain"] = livekit_domain if calls_enabled else ""
+
+    guest_access = calls.setdefault("guest_access", {})
+    if not isinstance(guest_access, dict):
+        guest_access = {}
+        calls["guest_access"] = guest_access
+
+    if not calls_enabled:
+        guest_access["enabled"] = False
+        return
+
+    if guest_access_enabled is not None:
+        guest_access["enabled"] = bool(guest_access_enabled)
+    elif "enabled" not in guest_access:
+        guest_access["enabled"] = False
+
+    if not guest_access.get("enabled"):
+        return
+
+    base_domain = server_name if server_name else matrix_domain.split(".", 1)[-1]
+    if guest_call_domain:
+        guest_access["domain"] = guest_call_domain
+    elif "domain" not in guest_access:
+        guest_access["domain"] = f"call.{base_domain}"
+
+    if guest_server_name:
+        guest_access["server_name"] = guest_server_name
+    elif "server_name" not in guest_access:
+        guest_access["server_name"] = f"guest.{base_domain}"
+
+    resolved_guest_server = guest_access.get("server_name", f"guest.{base_domain}")
+    if guest_matrix_domain:
+        guest_access["matrix_domain"] = guest_matrix_domain
+    elif "matrix_domain" not in guest_access:
+        guest_access["matrix_domain"] = f"matrix.{resolved_guest_server}"
 
 
 def oidc_json_to_deploy_providers(providers_json: str) -> list:
@@ -312,6 +350,7 @@ def emit_wizard_defaults(config: dict) -> str:
 
     element = features.get("element", {}) if isinstance(features.get("element", {}), dict) else {}
     calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    guest_access = calls.get("guest_access", {}) if isinstance(calls.get("guest_access", {}), dict) else {}
     sso = features.get("sso", {}) if isinstance(features.get("sso", {}), dict) else {}
 
     matrix_domain = matrix.get("domain", "matrix.example.com")
@@ -341,6 +380,12 @@ def emit_wizard_defaults(config: dict) -> str:
             to_bool(calls.get("enabled", True)), yes_default="y", no_default="n"
         ),
         "config_livekit_domain": calls.get("livekit_domain", ""),
+        "config_guest_access_default": shell_bool_default(
+            to_bool(guest_access.get("enabled", False)), yes_default="y", no_default="n"
+        ),
+        "config_guest_call_domain": guest_access.get("domain", ""),
+        "config_guest_server_name": guest_access.get("server_name", ""),
+        "config_guest_matrix_domain": guest_access.get("matrix_domain", ""),
         "config_local_login_default": shell_bool_default(
             to_bool(features.get("local_login_enabled", True)), yes_default="y", no_default="n"
         ),
@@ -430,6 +475,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--element-domain")
     parser.add_argument("--calls-enabled")
     parser.add_argument("--livekit-domain")
+    parser.add_argument("--guest-access-enabled")
+    parser.add_argument("--guest-call-domain")
+    parser.add_argument("--guest-server-name")
+    parser.add_argument("--guest-matrix-domain")
     parser.add_argument("--server-implementation")
     parser.add_argument("--local-login-enabled")
     parser.add_argument("--sso-enabled")
@@ -520,6 +569,12 @@ def main(argv: list[str] | None = None) -> int:
             local_login_enabled=(
                 to_bool(args.local_login_enabled) if args.local_login_enabled is not None else None
             ),
+            guest_access_enabled=(
+                to_bool(args.guest_access_enabled) if args.guest_access_enabled is not None else None
+            ),
+            guest_call_domain=args.guest_call_domain,
+            guest_server_name=args.guest_server_name,
+            guest_matrix_domain=args.guest_matrix_domain,
         )
         save(deploy_yaml, config)
         return 0

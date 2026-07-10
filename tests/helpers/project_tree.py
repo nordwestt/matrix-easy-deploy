@@ -129,6 +129,20 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "        reverse_proxy host.docker.internal:7880\n"
             "    }\n"
             "}\n"
+            "{{CADDY_GUEST_MATRIX_BLOCK}}"
+            "{{CADDY_ELEMENT_CALL_SITE_BLOCK}}"
+            "{{CADDY_ELEMENT_SITE_BLOCK}}\n"
+        )
+        (root / "modules/calls/guest").mkdir(parents=True, exist_ok=True)
+        (root / "modules/calls/guest/tuwunel.toml.template").write_text(
+            'server_name = "{{GUEST_SERVER_NAME}}"\n'
+            'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
+            'allowed_remote_server_names_experimental = ["^{{GUEST_FEDERATION_ALLOW_REGEX}}$"]\n'
+        )
+        (root / "modules/calls/docker-compose.guest.template").write_text(
+            'services:\n  lk-jwt-service:\n    extra_hosts:\n'
+            '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
+            '      "{{GUEST_MATRIX_DOMAIN}}": "host-gateway"\n'
         )
         (root / "modules/core/synapse/homeserver.yaml.template").write_text(
             "server_name: {{SERVER_NAME}}\n"

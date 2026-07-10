@@ -25,6 +25,11 @@ docker pull matrixdotorg/synapse:latest
 docker pull ghcr.io/matrix-construct/tuwunel:latest
 docker pull coturn/coturn:latest
 docker pull livekit/livekit-server:latest
+docker pull ghcr.io/element-hq/lk-jwt-service:latest
+
+if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
+    docker pull ghcr.io/element-hq/element-call:v0.21.0
+fi
 
 if [[ "${INSTALL_ELEMENT:-true}" == "true" ]]; then
     docker pull ghcr.io/element-hq/element-web:latest

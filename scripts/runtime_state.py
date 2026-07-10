@@ -66,12 +66,17 @@ def resolve_runtime_state(project_root: Path) -> dict[str, str]:
     compose_profile = "tuwunel" if server_implementation == "tuwunel" else "synapse"
     container = "matrix_tuwunel" if server_implementation == "tuwunel" else "matrix_synapse"
 
+    calls = _as_dict(features.get("calls"))
+    guest_access = _as_dict(calls.get("guest_access"))
+    guest_access_enabled = _as_bool(guest_access.get("enabled"), False) and _as_bool(calls.get("enabled"), True)
+
     return {
         "INSTALL_ELEMENT": "true" if install_element else "false",
         "MAS_ENABLED": "true" if mas_on else "false",
         "HOOKSHOT_ENABLED": "true" if module_enabled("hookshot") else "false",
         "WHATSAPP_BRIDGE_ENABLED": "true" if module_enabled("whatsapp_bridge") else "false",
         "SLACK_BRIDGE_ENABLED": "true" if module_enabled("slack_bridge") else "false",
+        "GUEST_ACCESS_ENABLED": "true" if guest_access_enabled else "false",
         "SERVER_IMPLEMENTATION": server_implementation,
         "HOMESERVER_COMPOSE_PROFILE": compose_profile,
         "HOMESERVER_CONTAINER": container,

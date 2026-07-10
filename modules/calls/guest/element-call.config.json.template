@@ -1,0 +1,17 @@
+{
+    "default_server_config": {
+        "m.homeserver": {
+            "base_url": "https://{{GUEST_MATRIX_DOMAIN}}",
+            "server_name": "{{GUEST_SERVER_NAME}}"
+        },
+        "org.matrix.msc4143.rtc_foci": [
+            {
+                "type": "livekit",
+                "livekit_service_url": "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
+            }
+        ]
+    },
+    "livekit": {
+        "livekit_service_url": "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
+    }
+}

@@ -64,7 +64,16 @@ features:
     livekit_domain: livekit.example.com
     # Element Call SPA used by Element Web for outbound MatrixRTC calls.
     # Defaults to https://call.element.io; your LiveKit backend comes from rtc_foci.
+    # When guest_access is enabled, element_call.url defaults to the self-hosted SPA.
     # element_call_url: https://call.element.io
+    guest_access:
+      enabled: false
+      # Element Call SPA domain (meeting links like https://call.example.com/roomId)
+      domain: call.example.com
+      # MXID domain for guest accounts (@alice:guest.example.com)
+      server_name: guest.example.com
+      # Guest homeserver client API (defaults to matrix.{server_name})
+      matrix_domain: matrix.guest.example.com
   local_login_enabled: true
   sso:
     enabled: false

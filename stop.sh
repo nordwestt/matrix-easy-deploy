@@ -43,7 +43,8 @@ if [[ -f "${SCRIPT_DIR}/modules/hookshot/hookshot/config.yml" ]]; then
 fi
 
 info "Stopping calls services (coturn + LiveKit)…"
-(cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" down)
+build_calls_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" down)
 
 info "Stopping core services…"
 (cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans)

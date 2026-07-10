@@ -450,6 +450,181 @@ def get_auto_join_config(features: dict) -> dict:
     return auto_join
 
 
+def get_calls_config(features: dict) -> dict:
+    calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    return calls
+
+
+def get_guest_access_config(calls: dict) -> dict:
+    guest = calls.get("guest_access", {}) if isinstance(calls.get("guest_access", {}), dict) else {}
+    return guest
+
+
+def guest_access_enabled(calls: dict) -> bool:
+    return bool(get_guest_access_config(calls).get("enabled", False))
+
+
+def resolve_guest_access_values(config: dict) -> dict[str, str]:
+    matrix = config.get("matrix", {}) if isinstance(config.get("matrix", {}), dict) else {}
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = get_calls_config(features)
+    guest = get_guest_access_config(calls)
+
+    matrix_domain = str(matrix.get("domain", ""))
+    server_name = str(matrix.get("server_name") or extract_base_domain(matrix_domain))
+    base_domain = extract_base_domain(matrix_domain)
+
+    guest_server_name = str(guest.get("server_name") or f"guest.{base_domain}").strip()
+    guest_call_domain = str(guest.get("domain") or f"call.{base_domain}").strip()
+    guest_matrix_domain = str(guest.get("matrix_domain") or f"matrix.{guest_server_name}").strip()
+
+    return {
+        "GUEST_SERVER_NAME": guest_server_name,
+        "GUEST_CALL_DOMAIN": guest_call_domain,
+        "GUEST_MATRIX_DOMAIN": guest_matrix_domain,
+        "GUEST_FEDERATION_ALLOW_REGEX": re.escape(server_name),
+    }
+
+
+def validate_calls_guest_access(config: dict) -> None:
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = get_calls_config(features)
+    guest = get_guest_access_config(calls)
+
+    if not guest:
+        return
+
+    unknown = set(guest) - {"enabled", "domain", "server_name", "matrix_domain"}
+    if unknown:
+        raise ValueError(
+            f"features.calls.guest_access has unknown keys: {', '.join(sorted(unknown))}"
+        )
+
+    if "enabled" in guest:
+        _require_bool(guest.get("enabled"), "features.calls.guest_access.enabled")
+
+    if not guest_access_enabled(calls):
+        return
+
+    if not calls.get("enabled", True):
+        raise ValueError("features.calls.guest_access.enabled requires features.calls.enabled=true")
+
+    if not bool(features.get("federation_enabled", True)):
+        raise ValueError(
+            "features.calls.guest_access.enabled requires features.federation_enabled=true"
+        )
+
+    if bool(features.get("registration_enabled", False)):
+        raise ValueError(
+            "features.calls.guest_access.enabled is incompatible with features.registration_enabled=true"
+        )
+
+    for key in ("domain", "server_name", "matrix_domain"):
+        if key in guest and guest[key] is not None:
+            _require_str(guest.get(key), f"features.calls.guest_access.{key}")
+
+
+def build_caddy_guest_matrix_block(guest_matrix_domain: str, guest_server_name: str) -> str:
+    hosts = [guest_matrix_domain]
+    if guest_server_name != guest_matrix_domain:
+        hosts.append(guest_server_name)
+    hosts_line = ", ".join(hosts)
+    return (
+        f"\n# Guest Tuwunel homeserver (Element Call external access)\n"
+        f"{hosts_line} {{\n"
+        "    handle /_matrix/* {\n"
+        "        reverse_proxy matrix_guest_tuwunel:8008\n"
+        "    }\n\n"
+        "    handle /.well-known/matrix/* {\n"
+        "        header Access-Control-Allow-Origin *\n"
+        "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
+        "            header_down -Access-Control-Allow-Origin\n"
+        "        }\n"
+        "    }\n\n"
+        "    header {\n"
+        "        X-Content-Type-Options nosniff\n"
+        "        X-Frame-Options SAMEORIGIN\n"
+        "        Referrer-Policy strict-origin-when-cross-origin\n"
+        '        Permissions-Policy "interest-cohort=()"\n'
+        "        -Server\n"
+        "    }\n\n"
+        "    encode gzip\n"
+        "    log\n"
+        "}\n"
+    )
+
+
+def build_caddy_element_call_site_block(guest_call_domain: str) -> str:
+    return (
+        f"\n# Element Call SPA (standalone meeting links)\n"
+        f"{guest_call_domain} {{\n"
+        "    handle {\n"
+        "        reverse_proxy matrix_element_call:8080\n"
+        "    }\n\n"
+        "    header {\n"
+        "        Access-Control-Allow-Origin *\n"
+        "        Access-Control-Allow-Methods \"GET, POST, OPTIONS\"\n"
+        "        Access-Control-Allow-Headers \"Authorization, Content-Type\"\n"
+        "        X-Content-Type-Options nosniff\n"
+        "        X-Frame-Options SAMEORIGIN\n"
+        "        Referrer-Policy strict-origin-when-cross-origin\n"
+        "        -Server\n"
+        "    }\n\n"
+        "    encode gzip\n"
+        "    log\n"
+        "}\n"
+    )
+
+
+def build_livekit_cs_api_url_overrides(
+    server_name: str,
+    matrix_domain: str,
+    guest_enabled: bool,
+    guest_server_name: str,
+    guest_matrix_domain: str,
+) -> str:
+    overrides = [f"{server_name}=https://{matrix_domain}"]
+    if guest_enabled and guest_server_name:
+        overrides.append(f"{guest_server_name}=https://{guest_matrix_domain}")
+    return ",".join(overrides)
+
+
+def build_livekit_full_access_homeservers(
+    server_name: str,
+    guest_enabled: bool,
+    guest_server_name: str,
+) -> str:
+    if guest_enabled and guest_server_name:
+        return f"{server_name},{guest_server_name}"
+    return server_name
+
+
+def build_element_call_guest_config(config: dict) -> dict:
+    features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
+    calls = get_calls_config(features)
+    guest_values = resolve_guest_access_values(config)
+    livekit_domain = calls.get("livekit_domain") or f"livekit.{extract_base_domain(config['matrix']['domain'])}"
+    jwt_url = f"https://{livekit_domain}/livekit/jwt"
+
+    return {
+        "default_server_config": {
+            "m.homeserver": {
+                "base_url": f"https://{guest_values['GUEST_MATRIX_DOMAIN']}",
+                "server_name": guest_values["GUEST_SERVER_NAME"],
+            },
+            "org.matrix.msc4143.rtc_foci": [
+                {
+                    "type": "livekit",
+                    "livekit_service_url": jwt_url,
+                }
+            ],
+        },
+        "livekit": {
+            "livekit_service_url": jwt_url,
+        },
+    }
+
+
 def get_auto_join_synapse_options(auto_join: dict) -> dict:
     synapse = auto_join.get("synapse", {}) if isinstance(auto_join.get("synapse", {}), dict) else {}
     return synapse
@@ -569,6 +744,10 @@ def validate_config(config: dict) -> None:
         auto_join = get_auto_join_config(features)
         if auto_join:
             validate_auto_join_config(auto_join)
+
+        calls = get_calls_config(features)
+        if calls:
+            validate_calls_guest_access(config)
 
         mas_config.validate_sso_config(config)
 
@@ -779,6 +958,47 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         derived["LIVEKIT_DOMAIN"] = calls.get("livekit_domain") or f"livekit.{extract_base_domain(matrix_domain)}"
     else:
         derived["LIVEKIT_DOMAIN"] = ""
+
+    guest_calls_enabled = calls_enabled and guest_access_enabled(calls)
+    derived["GUEST_ACCESS_ENABLED"] = "true" if guest_calls_enabled else "false"
+    if guest_calls_enabled:
+        guest_values = resolve_guest_access_values(config)
+        derived.update(guest_values)
+        derived["CADDY_GUEST_MATRIX_BLOCK"] = build_caddy_guest_matrix_block(
+            guest_values["GUEST_MATRIX_DOMAIN"],
+            guest_values["GUEST_SERVER_NAME"],
+        )
+        derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = build_caddy_element_call_site_block(
+            guest_values["GUEST_CALL_DOMAIN"]
+        )
+    else:
+        derived["GUEST_SERVER_NAME"] = ""
+        derived["GUEST_CALL_DOMAIN"] = ""
+        derived["GUEST_MATRIX_DOMAIN"] = ""
+        derived["GUEST_FEDERATION_ALLOW_REGEX"] = ""
+        derived["CADDY_GUEST_MATRIX_BLOCK"] = ""
+        derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = ""
+
+    derived["LIVEKIT_FULL_ACCESS_HOMESERVERS"] = build_livekit_full_access_homeservers(
+        server_name,
+        guest_calls_enabled,
+        derived.get("GUEST_SERVER_NAME", ""),
+    )
+    derived["LIVEKIT_CS_API_URL_OVERRIDES"] = build_livekit_cs_api_url_overrides(
+        server_name,
+        matrix_domain,
+        guest_calls_enabled,
+        derived.get("GUEST_SERVER_NAME", ""),
+        derived.get("GUEST_MATRIX_DOMAIN", ""),
+    )
+
+    if guest_calls_enabled and hs_spec.implementation == "tuwunel":
+        derived["GUEST_ACCESS_TUWUNEL_MAIN_WARNING"] = (
+            "Guest call access is enabled but the main homeserver is Tuwunel; "
+            "call reliability may be reduced (MSC4140 delayed events)."
+        )
+    else:
+        derived["GUEST_ACCESS_TUWUNEL_MAIN_WARNING"] = ""
 
     hosts = [matrix_domain]
     if server_name != matrix_domain:
@@ -1085,7 +1305,7 @@ ELEMENT_CALL_FEATURE_FLAGS = {
 def apply_calls_element_config(target: dict, config: dict) -> None:
     """Configure Element Web for MatrixRTC when the calls stack is enabled."""
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
-    calls = features.get("calls", {}) if isinstance(features.get("calls", {}), dict) else {}
+    calls = get_calls_config(features)
     if not calls.get("enabled", True):
         return
 
@@ -1098,15 +1318,27 @@ def apply_calls_element_config(target: dict, config: dict) -> None:
     default_server = target.setdefault("default_server_config", {})
     default_server["org.matrix.msc4143.rtc_foci"] = rtc_foci
 
-    element_call_url = str(calls.get("element_call_url") or DEFAULT_ELEMENT_CALL_URL).strip()
-    target["element_call"] = {
+    guest_enabled = guest_access_enabled(calls)
+    if guest_enabled:
+        guest_values = resolve_guest_access_values(config)
+        element_call_url = f"https://{guest_values['GUEST_CALL_DOMAIN']}"
+    else:
+        element_call_url = str(calls.get("element_call_url") or DEFAULT_ELEMENT_CALL_URL).strip()
+
+    element_call_cfg: dict[str, Any] = {
         "url": element_call_url,
         "use_exclusively": True,
     }
+    if guest_enabled:
+        element_call_cfg["guest_spa_url"] = element_call_url
+
+    target["element_call"] = element_call_cfg
 
     element_features = target.setdefault("features", {})
     for key, value in ELEMENT_CALL_FEATURE_FLAGS.items():
         element_features[key] = value
+    if guest_enabled:
+        element_features["feature_ask_to_join"] = True
 
 
 def build_element_config(config: dict) -> dict:
@@ -1376,6 +1608,27 @@ def render_templates(ctx: ApplyContext, config: dict, env_vars: dict) -> None:
     livekit_dest = ctx.project_root / "modules" / "calls" / "livekit" / "livekit.yaml"
     render_template(livekit_template, livekit_dest, env_vars)
     fail_if_unresolved_placeholder(livekit_dest)
+
+    if env_vars.get("GUEST_ACCESS_ENABLED") == "true":
+        guest_dir = ctx.project_root / "modules" / "calls" / "guest"
+        guest_dir.mkdir(parents=True, exist_ok=True)
+        (guest_dir / "tuwunel_data").mkdir(parents=True, exist_ok=True)
+
+        guest_tuwunel_template = guest_dir / "tuwunel.toml.template"
+        guest_tuwunel_dest = guest_dir / "tuwunel.toml"
+        render_template(guest_tuwunel_template, guest_tuwunel_dest, env_vars)
+        fail_if_unresolved_placeholder(guest_tuwunel_dest)
+
+        write_json(guest_dir / "element-call.config.json", build_element_call_guest_config(config))
+
+        guest_compose_template = ctx.project_root / "modules" / "calls" / "docker-compose.guest.template"
+        guest_compose_dest = ctx.project_root / "modules" / "calls" / "docker-compose.guest.yml"
+        render_template(guest_compose_template, guest_compose_dest, env_vars)
+        fail_if_unresolved_placeholder(guest_compose_dest)
+    else:
+        guest_compose_dest = ctx.project_root / "modules" / "calls" / "docker-compose.guest.yml"
+        if guest_compose_dest.exists():
+            guest_compose_dest.unlink()
 
     if env_vars.get("MAS_ENABLED") == "true":
         mas_template = ctx.project_root / "modules" / "mas" / "config.yaml.template"

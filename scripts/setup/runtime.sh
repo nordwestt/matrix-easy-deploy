@@ -31,9 +31,10 @@ stop_existing_services_for_first_setup_reset() {
     fi
 
     build_core_compose_stop_profiles
+    build_calls_compose_args "${SCRIPT_DIR}"
 
     (cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans) || true
-    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" down) || true
+    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" down) || true
     (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" down) || true
 }
 
@@ -90,7 +91,8 @@ start_services() {
 
     echo
     info "Starting calls services (coturn + LiveKit)…"
-    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" up -d --pull always)
+    build_calls_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" up -d --pull always)
     success "Calls services started."
 }
 

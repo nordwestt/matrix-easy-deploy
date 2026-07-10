@@ -29,13 +29,43 @@ services:
       LIVEKIT_URL: wss://${LIVEKIT_DOMAIN}/livekit/sfu
       LIVEKIT_KEY: ${LIVEKIT_KEY}
       LIVEKIT_SECRET: ${LIVEKIT_SECRET}
-      LIVEKIT_FULL_ACCESS_HOMESERVERS: ${SERVER_NAME}
-      LIVEKIT_CS_API_URL_OVERRIDES: ${SERVER_NAME}=https://${MATRIX_DOMAIN}
+      LIVEKIT_FULL_ACCESS_HOMESERVERS: ${LIVEKIT_FULL_ACCESS_HOMESERVERS}
+      LIVEKIT_CS_API_URL_OVERRIDES: ${LIVEKIT_CS_API_URL_OVERRIDES}
     extra_hosts:
       "${SERVER_NAME}": "host-gateway"
       "${MATRIX_DOMAIN}": "host-gateway"
     depends_on:
       - livekit
+    networks:
+      - caddy_net
+
+  guest-tuwunel:
+    image: ghcr.io/matrix-construct/tuwunel:latest
+    container_name: matrix_guest_tuwunel
+    profiles:
+      - guest-calls
+    restart: unless-stopped
+    volumes:
+      - ./guest/tuwunel_data:/data
+      - ./guest/tuwunel.toml:/tuwunel.toml:ro
+    command: ["--config", "/tuwunel.toml"]
+    networks:
+      - caddy_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8008/_matrix/client/versions >/dev/null 2>&1 || curl -fsS http://127.0.0.1:8008/_matrix/client/versions >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  element-call:
+    image: ghcr.io/element-hq/element-call:v0.21.0
+    container_name: matrix_element_call
+    profiles:
+      - guest-calls
+    restart: unless-stopped
+    volumes:
+      - ./guest/element-call.config.json:/app/config.json:ro
     networks:
       - caddy_net
 
