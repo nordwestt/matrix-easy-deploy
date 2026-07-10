@@ -1,6 +1,6 @@
 # 💊 MED-kit: The cure to your matrix deployment headaches
 
-An easy way to deploy your own [Matrix](https://matrix.org) homeserver with reasonable defaults.
+An easy way to deploy your own [Matrix](https://matrix.org) server with reasonable defaults.
 
 One script. A few questions. Your own communication infrastructure with the ability to federate. 
 
@@ -51,18 +51,27 @@ flowchart TD
 
 ```
 
-After running `matrix-wizard.sh` you'll have a working Matrix homeserver — the whole stack, containerised and wired together:
+After running `matrix-wizard.sh` you'll have a working Matrix server — the whole stack, containerised and wired together:
 
 
 | Service | What it does |
 |---------|-------------|
-| <img src="https://matrix.org/images/matrix-logo-white.svg" alt="Synapse" width="28"/> **[Synapse](https://github.com/element-hq/synapse)** | The Matrix homeserver. Handles federation, rooms, messages. |
+| <img src="https://matrix.org/images/matrix-logo-white.svg" alt="Synapse" width="28"/> **[Synapse](https://github.com/element-hq/synapse)** | The Matrix server. Handles federation, rooms, messages. |
 | <img src="https://element.io/assets-32bb636196f91ed59d7a49190e26b42c/5ef25c0d30ee3108da4c25e9/5f365d3197194f8c73b00112_logo-mark-primary.svg" alt="Element Web" width="28"/> **[Element Web](https://github.com/element-web/element-web)** | The web client. Served at your domain so anyone can log in from a browser. |
 | <img src="https://caddyserver.com/resources/images/logo-dark.svg" alt="Caddy" width="28"/> **[Caddy](https://caddyserver.com)** | Reverse proxy. Handles TLS automatically via Let's Encrypt. |
 | <img src="https://www.postgresql.org/media/img/about/press/elephant.png" alt="PostgreSQL" width="28"/> **PostgreSQL** | Database for Synapse. Considerably more robust than SQLite for anything beyond a toy. |
 | <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Redis_logo.svg/250px-Redis_logo.svg.png" alt="Redis" width="28"/> **Redis** | Shared cache/event store for modules (Hookshot E2EE now, others later). |
 | **[coturn](https://github.com/coturn/coturn)** | TURN server. Relays WebRTC traffic for 1:1 voice and video calls when both sides are behind NAT. |
 | <img src="https://livekit.io/favicon.ico" alt="LiveKit" width="28"/> **[LiveKit](https://livekit.io)** | SFU (Selective Forwarding Unit). Powers group video calls via Element Call and MatrixRTC. |
+
+✅ Your users authenticate against your identity system (MAS)
+✅ Your rooms and events live in your Synapse
+✅ Your calls are brokered through your MatrixRTC backend
+✅ Your media flows through your LiveKit
+✅ Your TURN relay is your coturn
+✅ Your call UI is your Element Call deployment
+
+So if Microsoft Teams, Google Meet, Slack disappeared tomorrow, your deployment would continue operating.
 
 Everything runs in Docker Compose. Caddy manages your TLS certificate without you lifting a finger.
 
@@ -436,7 +445,7 @@ The wizard will ask you:
 
 ### Configuration model
 
-- `matrix.server_implementation` selects the homeserver software: `synapse` (default) or [`tuwunel`](https://github.com/matrix-construct/tuwunel) (Rust, lower resource use). Set this in `deploy.yaml` before the first `bash apply.sh`, or choose it in the setup wizard. **Switching implementation on an existing deployment is not supported** (no Synapse→Tuwunel migration yet).
+- `matrix.server_implementation` selects the server software: `synapse` (default) or [`tuwunel`](https://github.com/matrix-construct/tuwunel) (Rust, lower resource use). Set this in `deploy.yaml` before the first `bash apply.sh`, or choose it in the setup wizard. **Switching implementation on an existing deployment is not supported** (no Synapse→Tuwunel migration yet).
 - `deploy.yaml` is the operator-owned source of truth.
 - `bash apply.sh` reads `deploy.yaml` and writes generated runtime artifacts (`.env`, rendered service configs, module state metadata).
 - Re-running `bash apply.sh` is idempotent by default: existing generated secrets are re-used.
@@ -458,13 +467,13 @@ bash apply.sh --rotate-secrets
 
 ### Auto-join rooms (Synapse and Tuwunel)
 
-`features.auto_join` defines which rooms new users are joined to on registration. The same configuration works for both Synapse and Tuwunel. `bash apply.sh` writes the alias list into the generated homeserver config and **automatically provisions** the rooms (name, topic, welcome message, handover) via med-admin — no separate setup step required.
+`features.auto_join` defines which rooms new users are joined to on registration. The same configuration works for both Synapse and Tuwunel. `bash apply.sh` writes the alias list into the generated server config and **automatically provisions** the rooms (name, topic, welcome message, handover) via med-admin — no separate setup step required.
 
 - `rooms`: list of room aliases. Each entry may be a plain alias string (for example `#welcome:example.com`) or an object with:
   - `alias` (required for objects): local alias name or full alias
   - `name`, `topic`, `message`: room display name, topic, and a one-time welcome message
   - `handover`: list of local usernames or MXIDs to invite and grant room admin (power level 100) so they can manage the room going forward
-  - `federated`: when `false` (default), the room is **public on your server** but not open to remote Matrix homeservers; set `true` only if you intentionally want the room federated
+  - `federated`: when `false` (default), the room is **public on your server** but not open to remote Matrix servers; set `true` only if you intentionally want the room federated
 - `synapse.rooms_for_guests`: Synapse-only — auto-join guest accounts too (default `true` when set)
 
 Rooms are created as **locally public** spaces: any user on your server can join, but they are **not** world-wide public unless you set `federated: true`.
@@ -488,7 +497,7 @@ features:
       rooms_for_guests: false
 ```
 
-When `rooms` is non-empty, `bash apply.sh` restarts services (by default), waits for the homeserver to respond, then provisions the rooms automatically via med-admin. Use `bash apply.sh --skip-auto-join-provision` to render config without provisioning (for example in CI).
+When `rooms` is non-empty, `bash apply.sh` restarts services (by default), waits for the server to respond, then provisions the rooms automatically via med-admin. Use `bash apply.sh --skip-auto-join-provision` to render config without provisioning (for example in CI).
 
 To re-provision manually or post the welcome message again, use:
 
@@ -582,7 +591,7 @@ Notes:
 
 ### Element Call guest access (optional)
 
-Enable shareable meeting links for people without Matrix accounts (like Google Meet). This deploys a lightweight guest Tuwunel homeserver and a self-hosted [Element Call](https://github.com/element-hq/element-call) SPA, reusing your existing LiveKit stack.
+Enable shareable meeting links for people without Matrix accounts (like Google Meet). This deploys a lightweight guest Tuwunel server and a self-hosted [Element Call](https://github.com/element-hq/element-call) SPA, reusing your existing LiveKit stack.
 
 Requirements:
 - `features.calls.enabled: true`
@@ -613,14 +622,14 @@ DNS records (all pointing at your VPS):
 | `matrix.guest.example.com` | Guest Tuwunel client API |
 | `guest.example.com` | Guest `SERVER_NAME` / well-known |
 
-Note: if your main homeserver is Tuwunel, call reliability may be reduced because Tuwunel lacks MSC4140 delayed events on the principal server. Synapse main + guest Tuwunel is the recommended combination.
+Note: if your main server is Tuwunel, call reliability may be reduced because Tuwunel lacks MSC4140 delayed events on the principal server. Synapse main + guest Tuwunel is the recommended combination.
 
 ### Important: `MATRIX_DOMAIN` vs `SERVER_NAME`
 
-- `MATRIX_DOMAIN` is where the homeserver API is hosted (for example `matrix.example.com`).
+- `MATRIX_DOMAIN` is where the server API is hosted (for example `matrix.example.com`).
 - `SERVER_NAME` is the Matrix identity domain in MXIDs (for example `@alice:example.com`).
 
-If these are different, federation discovery still starts from `SERVER_NAME`, so DNS for **both** names must point to this host (or `SERVER_NAME` must otherwise serve `/.well-known/matrix/*` that delegates to your homeserver).
+If these are different, federation discovery still starts from `SERVER_NAME`, so DNS for **both** names must point to this host (or `SERVER_NAME` must otherwise serve `/.well-known/matrix/*` that delegates to your server).
 
 This project now generates Caddy config that serves Matrix endpoints on both hostnames automatically.
 
@@ -723,7 +732,7 @@ Advantages:
 - Gives tighter onboarding control (who gets access and when).
 - Lets you combine IdP checks + explicit local account approval for defense in depth.
 
-Use the helper to create approved accounts (on Synapse with MAS, this registers users in MAS and provisions the homeserver user):
+Use the helper to create approved accounts (on Synapse with MAS, this registers users in MAS and provisions the server user):
 
 ```bash
 bash scripts/create-account.sh
@@ -765,8 +774,8 @@ matrix-easy-deploy/
 │   ├── core/                     # The core Matrix stack
 │   │   ├── docker-compose.yml    # Synapse + Element + PostgreSQL + shared Redis
 │   │   ├── synapse/
-│   │   │   ├── homeserver.yaml.template
-│   │   │   ├── homeserver.yaml   # Generated during setup
+│   │   │   ├── server.yaml.template
+│   │   │   ├── server.yaml   # Generated during setup
 │   │   │   └── log.config
 │   │   └── element/
 │   │       ├── config.json.template
@@ -1184,7 +1193,7 @@ docker logs matrix_element_call
 curl -I https://call.example.com
 curl -I https://matrix.guest.example.com/_matrix/client/versions
 ```
-Guest access requires federation on the main server and DNS for the Element Call domain, guest Matrix API domain, and guest `SERVER_NAME`. The guest Tuwunel server federates only with your main homeserver.
+Guest access requires federation on the main server and DNS for the Element Call domain, guest Matrix API domain, and guest `SERVER_NAME`. The guest Tuwunel server federates only with your main server.
 
 **1:1 calls fail or audio/video cuts out**
 
