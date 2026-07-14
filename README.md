@@ -641,7 +641,7 @@ bash scripts/call-link.sh '!AdAczRpx:example.com'
 bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
 ```
 
-If `join_rule` is `invite` or `restricted`, change the room in Element → Room settings → Access → **Anyone can join** or **Ask to join**, then retry in a fresh browser tab (Element Call caches room summaries).
+If `join_rule` is `invite` or `restricted`, change the room in Element → Room settings → Access → **Anyone can join** or **Ask to join**, then retry in a fresh browser tab (Element Call caches room summaries). The script checks both the main server and the guest homeserver — Element Call uses the guest path. `guest_can_join: false` on the main server is normal for this setup (it refers to legacy anonymous Synapse guests, not registered `@user:guest-server` accounts).
 
 Verify Element Web picked up the config (hard-refresh the client after `apply.sh`):
 
@@ -1242,7 +1242,7 @@ If guests register but Element Call says the room is “not joinable” / privat
 bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
 ```
 
-`join_rule` must be `public` or `knock`. Invite-only or restricted rooms fail before join. Earlier successful attempts may have occurred when the summary request failed and Element Call fell back to a direct join.
+`join_rule` must be `public` or `knock` on the **guest homeserver** summary (what Element Call fetches), not only on the main server. Invite-only or restricted rooms fail before join. If the main server says `public` but guests still fail, compare both probes from `guest-call-room-check.sh` — a missing or nested `join_rule` from guest Tuwunel triggers the same “not joinable” error. Earlier successful attempts may have occurred when the summary request failed and Element Call fell back to a direct join.
 
 **1:1 calls fail or audio/video cuts out**
 
