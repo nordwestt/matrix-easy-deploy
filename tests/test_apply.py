@@ -738,8 +738,10 @@ class ApplyTests(unittest.TestCase):
 
         guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
         self.assertIn('server_name = "guest.example.com"', guest_tuwunel)
+        self.assertIn("yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true", guest_tuwunel)
         self.assertIn("allow_room_creation = false", guest_tuwunel)
         self.assertIn("allowed_remote_server_names_experimental = ['^example\\.com$']", guest_tuwunel)
+        self.assertIn("[global.well_known]", guest_tuwunel)
         self.assertIn("livekit_url = \"https://livekit.example.com/livekit/jwt\"", guest_tuwunel)
 
         element_call_cfg = json.loads(

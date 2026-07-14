@@ -137,9 +137,12 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
         (root / "modules/calls/guest/tuwunel.toml.template").write_text(
             'server_name = "{{GUEST_SERVER_NAME}}"\n'
             "allow_registration = true\n"
+            "yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true\n"
             "allow_room_creation = false\n"
-            'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
             'allowed_remote_server_names_experimental = [\'^{{GUEST_FEDERATION_ALLOW_REGEX}}$\']\n'
+            "[global.well_known]\n"
+            'client = "https://{{GUEST_SERVER_NAME}}"\n'
+            'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
         )
         (root / "modules/calls/docker-compose.guest.template").write_text(
             'services:\n  lk-jwt-service:\n    extra_hosts:\n'

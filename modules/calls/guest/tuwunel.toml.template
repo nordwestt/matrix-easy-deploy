@@ -9,7 +9,7 @@ port = 8008
 
 # Open registration required for standalone Element Call (guest accounts only).
 allow_registration = true
-yes_i_am_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
+yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
 
 # Guests join meetings on the main server — they must not create rooms/calls here.
 allow_room_creation = false
@@ -17,12 +17,11 @@ allow_room_creation = false
 allow_federation = true
 allow_public_room_directory_over_federation = false
 
-# MatrixRTC — use the main server's LiveKit SFU.
-livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
-
 # Federate only with the principal homeserver.
 # Single-quoted: regex backslashes are literal in TOML (double quotes treat \. as invalid escapes).
 allowed_remote_server_names_experimental = ['^{{GUEST_FEDERATION_ALLOW_REGEX}}$']
 
 [global.well_known]
 client = "https://{{GUEST_SERVER_NAME}}"
+# MatrixRTC — use the main server's LiveKit SFU (must be under [global.well_known]).
+livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
