@@ -794,6 +794,10 @@ class ApplyTests(unittest.TestCase):
         )
         self.assertNotIn("posthog", element_call_cfg)
 
+        guest_nginx = (self.root / "modules/calls/guest/nginx.conf").read_text()
+        self.assertIn("sub_filter", guest_nginx)
+        self.assertTrue((self.root / "modules/calls/guest/nginx.conf").is_file())
+
         element = json.loads((self.root / "modules/core/element/config.json").read_text())
         self.assertEqual(element["element_call"]["url"], "https://call.example.com")
         self.assertEqual(element["element_call"]["guest_spa_url"], "https://call.example.com")

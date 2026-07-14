@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -684,6 +685,22 @@ def build_livekit_full_access_homeservers(
     if guest_enabled and guest_server_name:
         return f"{server_name},{guest_server_name}"
     return server_name
+
+
+def install_guest_element_call_assets(guest_dir: Path) -> None:
+    """Materialize Element Call guest files required for docker bind mounts."""
+    template = guest_dir / "nginx.conf.template"
+    if not template.is_file():
+        raise FileNotFoundError(f"Missing Element Call nginx template: {template}")
+
+    nginx_dest = guest_dir / "nginx.conf"
+    if nginx_dest.is_dir():
+        shutil.rmtree(nginx_dest)
+    shutil.copyfile(template, nginx_dest)
+
+    css_src = guest_dir / "guest-call.css"
+    if not css_src.is_file():
+        raise FileNotFoundError(f"Missing Element Call guest CSS: {css_src}")
 
 
 def build_element_call_guest_config(config: dict) -> dict:
@@ -1749,6 +1766,7 @@ def render_templates(ctx: ApplyContext, config: dict, env_vars: dict) -> None:
         fail_if_unresolved_placeholder(guest_tuwunel_dest)
 
         write_json(guest_dir / "element-call.config.json", build_element_call_guest_config(config))
+        install_guest_element_call_assets(guest_dir)
 
         caddy_guest_compose_template = ctx.project_root / "caddy" / "docker-compose.guest.template"
         caddy_guest_compose_dest = ctx.project_root / "caddy" / "docker-compose.guest.yml"

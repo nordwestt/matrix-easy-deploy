@@ -1,0 +1,32 @@
+# Element Call guest branding — inject guest-call.css without modifying /app (read-only).
+server {
+    listen 8080;
+    server_name localhost;
+
+    root /app;
+    gzip_vary on;
+
+    location = /guest-call.css {
+        alias /app/guest-call.css;
+        add_header Cache-Control "public, max-age=300";
+    }
+
+    location / {
+        # Precompressed index.html.gz would skip sub_filter; serve patched HTML instead.
+        gzip_static off;
+        sub_filter '</head>' '<link rel="stylesheet" href="/guest-call.css"></head>';
+        sub_filter_once on;
+        sub_filter_types text/html;
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "public, max-age=30, stale-while-revalidate=30";
+    }
+
+    location /assets {
+        gzip_static on;
+        add_header Cache-Control "public, immutable, max-age=31536000";
+    }
+
+    location /apple-app-site-association {
+        default_type application/json;
+    }
+}

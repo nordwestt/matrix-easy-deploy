@@ -663,7 +663,15 @@ The guest Element Call container loads `modules/calls/guest/guest-call.css` to h
 After changing branding or config, recreate the Element Call container:
 
 ```bash
+bash apply.sh
 cd modules/calls && docker compose --profile guest-calls up -d --force-recreate element-call
+```
+
+If Element Call fails to start with a mount error on `nginx.conf`, Docker may have created that path as a directory on an earlier run. Remove it and re-run apply:
+
+```bash
+rm -rf modules/calls/guest/nginx.conf
+bash apply.sh
 ```
 
 DNS records (all pointing at your VPS):

@@ -145,6 +145,15 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             'server = "{{GUEST_SERVER_NAME}}:443"\n'
             'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
         )
+        (root / "modules/calls/guest/nginx.conf.template").write_text(
+            "server {\n"
+            "    listen 8080;\n"
+            "    sub_filter '</head>' '<link rel=\"stylesheet\" href=\"/guest-call.css\"></head>';\n"
+            "}\n"
+        )
+        (root / "modules/calls/guest/guest-call.css").write_text(
+            "/* guest-call test stub */\n"
+        )
         (root / "caddy/docker-compose.guest.template").write_text(
             "services:\n  caddy:\n    networks:\n      caddy_net:\n        aliases:\n"
             "{{GUEST_CADDY_NETWORK_ALIASES}}\n"
