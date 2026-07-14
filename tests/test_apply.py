@@ -682,7 +682,8 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(
             url,
             "https://call.example.com/room/#/!AdAczRpx:example.com?"
-            "roomId=%21AdAczRpx%3Aexample.com&intent=join_existing&viaServers=example.com",
+            "roomId=%21AdAczRpx%3Aexample.com&intent=join_existing&viaServers=example.com"
+            "&confineToRoom=true&header=none",
         )
 
     def test_guest_tuwunel_federation_regex_uses_toml_literal_quotes(self):
@@ -759,8 +760,6 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("call.example.com {", caddy)
         self.assertIn("@guest_home path / /login /register", caddy)
         self.assertIn("/srv/guest-call-landing", caddy)
-        self.assertIn("/guest-call.css", caddy)
-        self.assertIn("/srv/guest-call-branding", caddy)
         self.assertIn("reverse_proxy matrix_element_call:8080", caddy)
 
         guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
@@ -788,6 +787,12 @@ class ApplyTests(unittest.TestCase):
             "https://livekit.example.com/livekit/jwt",
         )
         self.assertEqual(element_call_cfg.get("ssla"), "")
+        self.assertEqual(element_call_cfg.get("matrix_rtc_mode"), "compatibility")
+        self.assertEqual(
+            element_call_cfg.get("media_devices"),
+            {"enable_audio": True, "enable_video": False},
+        )
+        self.assertNotIn("posthog", element_call_cfg)
 
         element = json.loads((self.root / "modules/core/element/config.json").read_text())
         self.assertEqual(element["element_call"]["url"], "https://call.example.com")

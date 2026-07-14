@@ -656,7 +656,15 @@ After changing guest-call settings, restart Caddy so the landing page and brandi
 cd caddy && docker compose -f docker-compose.yml -f docker-compose.guest.yml up -d --force-recreate caddy
 ```
 
-The guest Element Call SPA hides Element’s SSLA text and post-call “create an account” prompts via `caddy/guest-call-branding/guest-call.css` (injected automatically). Guests only enter a display name and join — accounts remain throwaway.
+The guest Element Call container loads `modules/calls/guest/guest-call.css` to hide UI that Element Call does not expose in config (SSLA caption, account upsell). Guests only enter a display name and join — accounts remain throwaway.
+
+**Element Call `config.json`** (generated at `modules/calls/guest/element-call.config.json`) is separate from [Element Web config](https://web-docs.element.dev/config.html). We set homeserver + LiveKit, `matrix_rtc_mode: compatibility`, device defaults (mic on, camera off), clear `ssla`, and omit analytics keys (`posthog`, `sentry`, `rageshake`) so telemetry stays off. Guest meeting links also pass `confineToRoom=true` and `header=none` (Element Call URL flags).
+
+After changing branding or config, recreate the Element Call container:
+
+```bash
+cd modules/calls && docker compose --profile guest-calls up -d --force-recreate element-call
+```
 
 DNS records (all pointing at your VPS):
 

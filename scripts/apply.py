@@ -582,6 +582,9 @@ def build_guest_call_share_url(
         f"roomId={quote(room_id, safe='')}",
         f"intent={quote(intent, safe='')}",
         f"viaServers={quote(server_name.strip(), safe='')}",
+        # Element Call URL flags (UrlParams.ts): meeting-only UX for external guests.
+        "confineToRoom=true",
+        "header=none",
     ]
     return f"https://{call_domain}/room/#/{room_id}?{'&'.join(params)}"
 
@@ -643,20 +646,8 @@ def build_caddy_element_call_site_block(guest_call_domain: str) -> str:
         "        rewrite * /index.html\n"
         "        file_server\n"
         "    }\n\n"
-        "    handle /guest-call.css {\n"
-        "        root * /srv/guest-call-branding\n"
-        "        file_server\n"
-        "    }\n\n"
         "    handle {\n"
-        "        reverse_proxy matrix_element_call:8080 {\n"
-        "            @html header Content-Type text/html*\n"
-        "            handle_response @html {\n"
-        "                replace {\n"
-        '                    search "</head>"\n'
-        '                    replace "<link rel=\\"stylesheet\\" href=\\"/guest-call.css\\"></head>"\n'
-        "                }\n"
-        "            }\n"
-        "        }\n"
+        "        reverse_proxy matrix_element_call:8080\n"
         "    }\n\n"
         "    header {\n"
         "        Access-Control-Allow-Origin *\n"
@@ -696,6 +687,11 @@ def build_livekit_full_access_homeservers(
 
 
 def build_element_call_guest_config(config: dict) -> dict:
+    """Build Element Call SPA config (see element-call ConfigOptions.ts / config.sample.json).
+
+    Element Web's config.json schema (web-docs.element.dev) does not apply here.
+    Analytics (posthog/sentry/rageshake) are omitted so they stay disabled.
+    """
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
     calls = get_calls_config(features)
     guest_values = resolve_guest_access_values(config)
@@ -718,8 +714,23 @@ def build_element_call_guest_config(config: dict) -> dict:
         "livekit": {
             "livekit_service_url": jwt_url,
         },
-        # Omit Element's corporate SSLA; guest-call.css hides any remaining legal line.
+        "features": {
+            "feature_use_device_session_member_events": True,
+        },
+        # Clear Element's default SSLA URL (v0.21 still renders the caption text; guest-call.css hides it).
         "ssla": "",
+        "matrix_rtc_mode": "compatibility",
+        "matrix_rtc_session": {
+            "wait_for_key_rotation_ms": 3000,
+            "membership_event_expiry_ms": 180000000,
+            "delayed_leave_event_delay_ms": 18000,
+            "delayed_leave_event_restart_ms": 4000,
+            "network_error_retry_ms": 100,
+        },
+        "media_devices": {
+            "enable_audio": True,
+            "enable_video": False,
+        },
     }
 
 

@@ -64,8 +64,11 @@ services:
     profiles:
       - guest-calls
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/element-call-entrypoint.sh"]
     volumes:
       - ./guest/element-call.config.json:/app/config.json:ro
+      - ./guest/guest-call.css:/app/guest-call.css:ro
+      - ./guest/element-call-entrypoint.sh:/element-call-entrypoint.sh:ro
     networks:
       - caddy_net
 
