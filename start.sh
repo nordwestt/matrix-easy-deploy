@@ -12,7 +12,8 @@ ensure_docker_volume "caddy_data"
 ensure_homeserver_data_permissions "${SCRIPT_DIR}"
 
 info "Starting Caddy…"
-(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" up -d)
+build_caddy_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d)
 
 info "Starting core services…"
 # Load .env if it exists so POSTGRES_PASSWORD and INSTALL_ELEMENT are available

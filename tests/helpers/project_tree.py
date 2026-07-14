@@ -144,19 +144,13 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             'client = "https://{{GUEST_SERVER_NAME}}"\n'
             'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
         )
-        (root / "modules/calls/docker-compose.guest.template").write_text(
-            'services:\n  lk-jwt-service:\n    extra_hosts:\n'
-            '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
-            '  guest-tuwunel:\n    extra_hosts:\n'
-            '{{GUEST_TUWUNEL_EXTRA_HOSTS}}\n'
+        (root / "caddy/docker-compose.guest.template").write_text(
+            "services:\n  caddy:\n    networks:\n      caddy_net:\n        aliases:\n"
+            "{{GUEST_CADDY_NETWORK_ALIASES}}\n"
         )
         (root / "modules/core/docker-compose.guest.template").write_text(
-            'services:\n  synapse:\n    extra_hosts:\n'
-            '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
-            '    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n'
-            '  tuwunel:\n    extra_hosts:\n'
-            '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
-            '    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n'
+            "services:\n  synapse:\n    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n"
+            "  tuwunel:\n    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n"
         )
         (root / "modules/core/synapse/homeserver.yaml.template").write_text(
             "server_name: {{SERVER_NAME}}\n"

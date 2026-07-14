@@ -51,6 +51,7 @@ info "Stopping core services…"
 (cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans)
 
 info "Stopping Caddy…"
-(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" down)
+build_caddy_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" down)
 
 success "All services stopped. Your data is intact in Docker volumes."

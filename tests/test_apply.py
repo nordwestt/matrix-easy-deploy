@@ -705,7 +705,7 @@ class ApplyTests(unittest.TestCase):
             guest_tuwunel,
         )
 
-    def test_apply_configuration_guest_access_dedupes_extra_hosts_when_domains_match(self):
+    def test_apply_configuration_guest_access_dedupes_caddy_aliases_when_domains_match(self):
         cfg = self.sample_config()
         cfg["matrix"]["domain"] = "matrix.nordwestt.com"
         cfg["matrix"]["server_name"] = "matrix.nordwestt.com"
@@ -719,11 +719,12 @@ class ApplyTests(unittest.TestCase):
 
         apply.apply_configuration(ctx, server_ip="9.8.7.6")
 
-        guest_compose = (self.root / "modules/calls/docker-compose.guest.yml").read_text()
+        caddy_guest_compose = (self.root / "caddy/docker-compose.guest.yml").read_text()
         self.assertEqual(
-            guest_compose.count('"matrix.nordwestt.com": "host-gateway"'),
+            caddy_guest_compose.count('"matrix.nordwestt.com"'),
             1,
         )
+        self.assertIn('"matrix-guest.nordwestt.com"', caddy_guest_compose)
 
     def test_apply_configuration_guest_access_renders_guest_stack(self):
         cfg = self.sample_config()
@@ -786,17 +787,15 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(element["element_call"]["guest_spa_url"], "https://call.example.com")
         self.assertTrue(element["features"]["feature_ask_to_join"])
 
-        guest_compose = (self.root / "modules/calls/docker-compose.guest.yml").read_text()
-        self.assertIn("guest.example.com", guest_compose)
-        self.assertIn('      "example.com": "host-gateway"', guest_compose)
-        self.assertIn('      "matrix.example.com": "host-gateway"', guest_compose)
-        self.assertIn("guest-tuwunel:", guest_compose)
+        caddy_guest_compose = (self.root / "caddy/docker-compose.guest.yml").read_text()
+        self.assertIn("guest.example.com", caddy_guest_compose)
+        self.assertIn("example.com", caddy_guest_compose)
+        self.assertIn("matrix.example.com", caddy_guest_compose)
 
         core_guest_compose = (self.root / "modules/core/docker-compose.guest.yml").read_text()
-        self.assertIn("guest.example.com", core_guest_compose)
         self.assertIn("synapse:", core_guest_compose)
-        self.assertIn("tuwunel:", core_guest_compose)
         self.assertIn("1.1.1.1", core_guest_compose)
+        self.assertNotIn("extra_hosts", core_guest_compose)
 
         synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
         self.assertIn('ip_range_whitelist:\n  - "172.16.0.0/12"', synapse)
@@ -814,6 +813,7 @@ class ApplyTests(unittest.TestCase):
         self.assertNotIn("matrix_element_call", caddy)
         self.assertFalse((self.root / "modules/calls/docker-compose.guest.yml").exists())
         self.assertFalse((self.root / "modules/core/docker-compose.guest.yml").exists())
+        self.assertFalse((self.root / "caddy/docker-compose.guest.yml").exists())
 
         env_text = (self.root / ".env").read_text()
         self.assertIn("GUEST_ACCESS_ENABLED=false", env_text)

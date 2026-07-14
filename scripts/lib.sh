@@ -243,6 +243,14 @@ load_runtime_desired_state() {
     fi
 }
 
+# Compose file list for caddy/docker-compose.yml (optional guest federation aliases).
+build_caddy_compose_args() {
+    CADDY_COMPOSE_ARGS=(-f docker-compose.yml)
+    if [[ -f "${1}/caddy/docker-compose.guest.yml" ]]; then
+        CADDY_COMPOSE_ARGS+=(-f docker-compose.guest.yml)
+    fi
+}
+
 # Compose file list for modules/core/docker-compose.yml (optional guest federation overlay).
 build_core_compose_args() {
     CORE_COMPOSE_ARGS=(-f docker-compose.yml)

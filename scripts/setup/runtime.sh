@@ -32,11 +32,12 @@ stop_existing_services_for_first_setup_reset() {
 
     build_core_compose_stop_profiles
     build_core_compose_args "${SCRIPT_DIR}"
+    build_caddy_compose_args "${SCRIPT_DIR}"
     build_calls_compose_args "${SCRIPT_DIR}"
 
     (cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans) || true
     (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" down) || true
-    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" down) || true
+    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" down) || true
 }
 
 reset_core_postgres_volume_if_present() {
@@ -59,7 +60,8 @@ start_services() {
 
     echo
     info "Starting Caddy…"
-    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" up -d --pull always)
+    build_caddy_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d --pull always)
     success "Caddy is up."
 
     echo

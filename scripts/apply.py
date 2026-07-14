@@ -475,6 +475,16 @@ def format_compose_extra_hosts(*hostnames: str) -> str:
     return "\n".join(f'      "{host}": "host-gateway"' for host in seen)
 
 
+def format_caddy_guest_network_aliases(*hostnames: str) -> str:
+    """YAML network alias lines for Caddy on caddy_net (deduplicated)."""
+    seen: list[str] = []
+    for hostname in hostnames:
+        host = (hostname or "").strip()
+        if host and host not in seen:
+            seen.append(host)
+    return "\n".join(f'          - "{host}"' for host in seen)
+
+
 def resolve_guest_access_values(config: dict) -> dict[str, str]:
     matrix = config.get("matrix", {}) if isinstance(config.get("matrix", {}), dict) else {}
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
@@ -743,8 +753,8 @@ def build_synapse_guest_federation_section(guest_enabled: bool) -> str:
         return ""
     return (
         "\n"
-        "# Guest Element Call — Synapse reaches the guest homeserver via Docker\n"
-        "# host-gateway (see modules/core/docker-compose.guest.yml extra_hosts).\n"
+        "# Guest Element Call — Synapse reaches the guest homeserver via Caddy on\n"
+        "# caddy_net (see caddy/docker-compose.guest.yml network aliases).\n"
         "# Without this whitelist, Synapse drops the private bridge IP and key fetches fail.\n"
         "ip_range_whitelist:\n"
         '  - "172.16.0.0/12"\n'
@@ -1037,7 +1047,8 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
     if guest_calls_enabled:
         guest_values = resolve_guest_access_values(config)
         derived.update(guest_values)
-        derived["GUEST_TUWUNEL_EXTRA_HOSTS"] = format_compose_extra_hosts(
+        derived["GUEST_CADDY_NETWORK_ALIASES"] = format_caddy_guest_network_aliases(
+            guest_values["GUEST_SERVER_NAME"],
             server_name,
             matrix_domain,
         )
@@ -1051,7 +1062,7 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         derived["GUEST_SERVER_NAME"] = ""
         derived["GUEST_CALL_DOMAIN"] = ""
         derived["GUEST_FEDERATION_ALLOW_REGEX"] = ""
-        derived["GUEST_TUWUNEL_EXTRA_HOSTS"] = ""
+        derived["GUEST_CADDY_NETWORK_ALIASES"] = ""
         derived["CADDY_GUEST_MATRIX_BLOCK"] = ""
         derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = ""
 
@@ -1696,10 +1707,10 @@ def render_templates(ctx: ApplyContext, config: dict, env_vars: dict) -> None:
 
         write_json(guest_dir / "element-call.config.json", build_element_call_guest_config(config))
 
-        guest_compose_template = ctx.project_root / "modules" / "calls" / "docker-compose.guest.template"
-        guest_compose_dest = ctx.project_root / "modules" / "calls" / "docker-compose.guest.yml"
-        render_template(guest_compose_template, guest_compose_dest, env_vars)
-        fail_if_unresolved_placeholder(guest_compose_dest)
+        caddy_guest_compose_template = ctx.project_root / "caddy" / "docker-compose.guest.template"
+        caddy_guest_compose_dest = ctx.project_root / "caddy" / "docker-compose.guest.yml"
+        render_template(caddy_guest_compose_template, caddy_guest_compose_dest, env_vars)
+        fail_if_unresolved_placeholder(caddy_guest_compose_dest)
 
         core_guest_compose_template = ctx.project_root / "modules" / "core" / "docker-compose.guest.template"
         core_guest_compose_dest = ctx.project_root / "modules" / "core" / "docker-compose.guest.yml"
@@ -1709,6 +1720,9 @@ def render_templates(ctx: ApplyContext, config: dict, env_vars: dict) -> None:
         guest_compose_dest = ctx.project_root / "modules" / "calls" / "docker-compose.guest.yml"
         if guest_compose_dest.exists():
             guest_compose_dest.unlink()
+        caddy_guest_compose_dest = ctx.project_root / "caddy" / "docker-compose.guest.yml"
+        if caddy_guest_compose_dest.exists():
+            caddy_guest_compose_dest.unlink()
         core_guest_compose_dest = ctx.project_root / "modules" / "core" / "docker-compose.guest.yml"
         if core_guest_compose_dest.exists():
             core_guest_compose_dest.unlink()
@@ -2093,11 +2107,11 @@ def apply_configuration(
         guest_server_name = env_vars.get("GUEST_SERVER_NAME", "").strip()
         if guest_server_name:
             print(
-                "Guest federation: Synapse uses extra_hosts for "
-                f"{guest_server_name} (modules/core/docker-compose.guest.yml). "
-                "After apply, verify with:\n"
-                f"  docker inspect matrix_synapse --format '{{{{json .HostConfig.ExtraHosts}}}}'\n"
-                f"  docker exec matrix_synapse getent hosts {guest_server_name}"
+                "Guest federation: Matrix hostnames resolve to Caddy on caddy_net "
+                f"(caddy/docker-compose.guest.yml). After apply, verify with:\n"
+                f"  docker exec matrix_synapse getent hosts {guest_server_name}\n"
+                "  docker exec matrix_synapse wget -qO- "
+                f"https://{guest_server_name}/_matrix/key/v2/server/{guest_server_name}"
             )
         if env_vars.get("GUEST_ACCESS_TUWUNEL_MAIN_WARNING"):
             print(env_vars["GUEST_ACCESS_TUWUNEL_MAIN_WARNING"])
