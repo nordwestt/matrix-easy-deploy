@@ -151,6 +151,10 @@ def build_caddy_element_routing(
 
     element_fallback = (
         "\n    # Element web client (same host as Matrix API)\n"
+        "    handle /config.json {\n"
+        '        header Cache-Control "no-cache"\n'
+        "        reverse_proxy matrix_element:80\n"
+        "    }\n\n"
         "    handle {\n"
         "        reverse_proxy matrix_element:80\n"
         "    }\n"
@@ -165,6 +169,10 @@ def build_caddy_element_routing(
     element_site = (
         f"\n# Element web client — served on its own domain\n"
         f"{element_domain} {{\n"
+        "    handle /config.json {\n"
+        '        header Cache-Control "no-cache"\n'
+        "        reverse_proxy matrix_element:80\n"
+        "    }\n\n"
         "    handle {\n"
         "        reverse_proxy matrix_element:80\n"
         "    }\n\n"

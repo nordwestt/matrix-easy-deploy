@@ -616,9 +616,31 @@ When enabled, Element Web uses your self-hosted Element Call URL for both regist
 **How it works (Google Meet style):**
 
 - Employees on your main server create calls/rooms in Element Web and share the guest link with externals.
-- Externals open the shared link (for example `https://call.example.com/room/#/WeeklySync?roomId=...&intent=join_existing`) — a guest account is created automatically in the background.
+- Externals open the shared link (for example `https://call.example.com/room/#/!room:example.com?roomId=...&intent=join_existing&viaServers=example.com`) — a guest account is created automatically in the background.
 - Visiting `https://call.example.com/` alone shows a simple “join your meeting” page — no login or register buttons.
 - The guest homeserver allows registration but **blocks room creation**; only your main server can create rooms/calls.
+
+**Important — two different “share” actions in Element Web:**
+
+| Action | Link shape | For guests? |
+|--------|------------|-------------|
+| Room header **Share** (matrix icon) | `https://matrix.to/#/!room:server` | No — sends people to Matrix client login |
+| **Invite to call** / guest link (link icon while a call is active) | `https://call.example.com/room/#/...` | Yes — opens your Element Call SPA |
+
+The guest call link button appears in Element Web when `guest_spa_url` is configured (done automatically by `apply.sh`) and the room allows guest access (public join, or “Ask to join” with `feature_ask_to_join`). It only shows while a call is active in that room.
+
+Generate a guest link from the shell (e.g. after copying the room ID from Element):
+
+```bash
+bash scripts/call-link.sh '!AdAczRpx:example.com'
+```
+
+Verify Element Web picked up the config (hard-refresh the client after `apply.sh`):
+
+```bash
+curl -s "https://element.example.com/config.json" | jq '.element_call'
+# Expect: "url" and "guest_spa_url" both pointing at https://call.example.com
+```
 
 After changing guest-call settings, restart Caddy so the landing page volume is picked up:
 

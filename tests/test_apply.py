@@ -673,6 +673,18 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(merged["element_call"]["url"], "https://call.element.io")
         self.assertTrue(merged["features"]["feature_group_calls"])
 
+    def test_build_guest_call_share_url_matches_element_web_format(self):
+        url = apply.build_guest_call_share_url(
+            "call.example.com",
+            "!AdAczRpx:example.com",
+            "example.com",
+        )
+        self.assertEqual(
+            url,
+            "https://call.example.com/room/#/!AdAczRpx:example.com?"
+            "roomId=%21AdAczRpx%3Aexample.com&intent=join_existing&viaServers=example.com",
+        )
+
     def test_apply_configuration_guest_access_renders_guest_stack(self):
         cfg = self.sample_config()
         cfg["features"]["calls"]["guest_access"] = {
@@ -698,7 +710,9 @@ class ApplyTests(unittest.TestCase):
         caddy = (self.root / "caddy/Caddyfile").read_text()
         self.assertIn("guest.example.com {", caddy)
         self.assertIn("Access-Control-Allow-Origin *", caddy)
-        self.assertIn("@cors_preflight method OPTIONS", caddy)
+        self.assertIn("@cors_preflight", caddy)
+        self.assertIn("header_down Access-Control-Allow-Origin *", caddy)
+        self.assertIn("Access-Control-Request-Headers", caddy)
         self.assertIn("reverse_proxy matrix_guest_tuwunel:8008", caddy)
         self.assertIn("call.example.com {", caddy)
         self.assertIn("@guest_home path / /login /register", caddy)

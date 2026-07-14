@@ -34,6 +34,7 @@ EOF
     if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
         echo -e "    See logs (Guest HS):    ${CYAN}docker logs -f matrix_guest_tuwunel${RESET}"
         echo -e "    See logs (Element Call): ${CYAN}docker logs -f matrix_element_call${RESET}"
+        echo -e "    Guest call link:        ${CYAN}bash scripts/call-link.sh '!room:server'${RESET}"
     fi
     echo -e "    See logs (coturn):      ${CYAN}docker logs -f matrix_coturn${RESET}"
     echo -e "    See logs (Caddy):       ${CYAN}docker logs -f caddy${RESET}"

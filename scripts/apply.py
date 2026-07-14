@@ -526,33 +526,75 @@ def validate_calls_guest_access(config: dict) -> None:
             _require_str(guest.get(key), f"features.calls.guest_access.{key}")
 
 
+def build_guest_call_share_url(
+    call_domain: str,
+    room_id: str,
+    server_name: str,
+    *,
+    intent: str = "join_existing",
+) -> str:
+    """Build an Element Call SPA link for external guests (matches Element Web format)."""
+    from urllib.parse import quote
+
+    room_id = room_id.strip()
+    if not room_id.startswith("!") or ":" not in room_id:
+        raise ValueError("room_id must be a Matrix room ID like !abc:example.com")
+
+    call_domain = call_domain.strip().rstrip("/")
+    if call_domain.startswith("https://"):
+        call_domain = call_domain[len("https://") :]
+    elif call_domain.startswith("http://"):
+        call_domain = call_domain[len("http://") :]
+
+    params = [
+        f"roomId={quote(room_id, safe='')}",
+        f"intent={quote(intent, safe='')}",
+        f"viaServers={quote(server_name.strip(), safe='')}",
+    ]
+    return f"https://{call_domain}/room/#/{room_id}?{'&'.join(params)}"
+
+
 def build_caddy_guest_matrix_block(guest_server_name: str) -> str:
-    cors_headers = (
-        "        header Access-Control-Allow-Origin *\n"
-        '        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
-        '        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"\n'
+    cors_allow_headers = (
+        "Authorization, Content-Type, X-Requested-With, Accept, Origin, "
+        "Cache-Control, Pragma, X-CSRF-Token"
+    )
+    cors_proxy_headers = (
+        "            header_down -Access-Control-Allow-Origin\n"
+        "            header_down -Access-Control-Allow-Methods\n"
+        "            header_down -Access-Control-Allow-Headers\n"
+        "            header_down Access-Control-Allow-Origin *\n"
+        '            header_down Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
+        f'            header_down Access-Control-Allow-Headers "{cors_allow_headers}"\n'
     )
     return (
         f"\n# Guest Tuwunel homeserver (Element Call external access)\n"
         f"{guest_server_name} {{\n"
+        "    @cors_preflight {\n"
+        "        method OPTIONS\n"
+        "        path /_matrix/*\n"
+        "    }\n"
+        "    handle @cors_preflight {\n"
+        "        header Access-Control-Allow-Origin *\n"
+        '        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
+        "        header Access-Control-Allow-Headers {http.request.header.Access-Control-Request-Headers}\n"
+        "        header Access-Control-Max-Age 86400\n"
+        '        respond "" 204\n'
+        "    }\n\n"
         "    handle /_matrix/* {\n"
-        "        @cors_preflight method OPTIONS\n"
-        "        handle @cors_preflight {\n"
-        f"{cors_headers}"
-        '            respond "" 204\n'
-        "        }\n\n"
-        f"{cors_headers}"
         "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
-        "            header_down -Access-Control-Allow-Origin\n"
+        f"{cors_proxy_headers}"
         "        }\n"
         "    }\n\n"
         "    handle /.well-known/matrix/* {\n"
-        "        header Access-Control-Allow-Origin *\n"
         "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
-        "            header_down -Access-Control-Allow-Origin\n"
+        f"{cors_proxy_headers}"
         "        }\n"
         "    }\n\n"
         "    header {\n"
+        "        Access-Control-Allow-Origin *\n"
+        '        Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
+        f'        Access-Control-Allow-Headers "{cors_allow_headers}"\n'
         "        X-Content-Type-Options nosniff\n"
         "        X-Frame-Options SAMEORIGIN\n"
         "        Referrer-Policy strict-origin-when-cross-origin\n"
@@ -2009,6 +2051,20 @@ def apply_configuration(
     schedule_status = backup_schedule.reconcile(ctx.project_root, config)
     if schedule_status:
         print(schedule_status)
+
+    if env_vars.get("GUEST_ACCESS_ENABLED") == "true":
+        guest_call_domain = env_vars.get("GUEST_CALL_DOMAIN", "").strip()
+        server_name = env_vars.get("SERVER_NAME", "").strip()
+        print(
+            "Guest call access enabled. Element Web is configured with "
+            f"element_call.url and guest_spa_url → https://{guest_call_domain}"
+        )
+        print(
+            "Share guest meeting links with: bash scripts/call-link.sh ROOM_ID "
+            "(not the matrix.to room share button)."
+        )
+        if env_vars.get("GUEST_ACCESS_TUWUNEL_MAIN_WARNING"):
+            print(env_vars["GUEST_ACCESS_TUWUNEL_MAIN_WARNING"])
 
 
 def wait_for_homeserver(ctx: ApplyContext, *, after_restart: bool = False) -> None:
