@@ -139,7 +139,7 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "allow_registration = true\n"
             "allow_room_creation = false\n"
             'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
-            'allowed_remote_server_names_experimental = ["^{{GUEST_FEDERATION_ALLOW_REGEX}}$"]\n'
+            'allowed_remote_server_names_experimental = [\'^{{GUEST_FEDERATION_ALLOW_REGEX}}$\']\n'
         )
         (root / "modules/calls/docker-compose.guest.template").write_text(
             'services:\n  lk-jwt-service:\n    extra_hosts:\n'

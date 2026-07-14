@@ -21,7 +21,8 @@ allow_public_room_directory_over_federation = false
 livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
 
 # Federate only with the principal homeserver.
-allowed_remote_server_names_experimental = ["^{{GUEST_FEDERATION_ALLOW_REGEX}}$"]
+# Single-quoted: regex backslashes are literal in TOML (double quotes treat \. as invalid escapes).
+allowed_remote_server_names_experimental = ['^{{GUEST_FEDERATION_ALLOW_REGEX}}$']
 
 [global.well_known]
 client = "https://{{GUEST_SERVER_NAME}}"

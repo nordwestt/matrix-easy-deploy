@@ -555,46 +555,22 @@ def build_guest_call_share_url(
 
 
 def build_caddy_guest_matrix_block(guest_server_name: str) -> str:
-    cors_allow_headers = (
-        "Authorization, Content-Type, X-Requested-With, Accept, Origin, "
-        "Cache-Control, Pragma, X-CSRF-Token"
-    )
-    cors_proxy_headers = (
-        "            header_down -Access-Control-Allow-Origin\n"
-        "            header_down -Access-Control-Allow-Methods\n"
-        "            header_down -Access-Control-Allow-Headers\n"
-        "            header_down Access-Control-Allow-Origin *\n"
-        '            header_down Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
-        f'            header_down Access-Control-Allow-Headers "{cors_allow_headers}"\n'
-    )
     return (
         f"\n# Guest Tuwunel homeserver (Element Call external access)\n"
         f"{guest_server_name} {{\n"
-        "    @cors_preflight {\n"
-        "        method OPTIONS\n"
-        "        path /_matrix/*\n"
-        "    }\n"
-        "    handle @cors_preflight {\n"
-        "        header Access-Control-Allow-Origin *\n"
-        '        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
-        "        header Access-Control-Allow-Headers {http.request.header.Access-Control-Request-Headers}\n"
-        "        header Access-Control-Max-Age 86400\n"
-        '        respond "" 204\n'
-        "    }\n\n"
         "    handle /_matrix/* {\n"
+        "        header Access-Control-Allow-Origin *\n"
         "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
-        f"{cors_proxy_headers}"
+        "            header_down -Access-Control-Allow-Origin\n"
         "        }\n"
         "    }\n\n"
         "    handle /.well-known/matrix/* {\n"
+        "        header Access-Control-Allow-Origin *\n"
         "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
-        f"{cors_proxy_headers}"
+        "            header_down -Access-Control-Allow-Origin\n"
         "        }\n"
         "    }\n\n"
         "    header {\n"
-        "        Access-Control-Allow-Origin *\n"
-        '        Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
-        f'        Access-Control-Allow-Headers "{cors_allow_headers}"\n'
         "        X-Content-Type-Options nosniff\n"
         "        X-Frame-Options SAMEORIGIN\n"
         "        Referrer-Policy strict-origin-when-cross-origin\n"

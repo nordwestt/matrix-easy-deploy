@@ -685,6 +685,25 @@ class ApplyTests(unittest.TestCase):
             "roomId=%21AdAczRpx%3Aexample.com&intent=join_existing&viaServers=example.com",
         )
 
+    def test_guest_tuwunel_federation_regex_uses_toml_literal_quotes(self):
+        cfg = self.sample_config()
+        cfg["matrix"]["server_name"] = "matrix.nordwestt.com"
+        cfg["features"]["calls"]["guest_access"] = {
+            "enabled": True,
+            "domain": "call.nordwestt.com",
+            "server_name": "matrix-guest.nordwestt.com",
+        }
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
+        self.assertIn(
+            "allowed_remote_server_names_experimental = ['^matrix\\.nordwestt\\.com$']",
+            guest_tuwunel,
+        )
+
     def test_apply_configuration_guest_access_renders_guest_stack(self):
         cfg = self.sample_config()
         cfg["features"]["calls"]["guest_access"] = {
@@ -710,10 +729,8 @@ class ApplyTests(unittest.TestCase):
         caddy = (self.root / "caddy/Caddyfile").read_text()
         self.assertIn("guest.example.com {", caddy)
         self.assertIn("Access-Control-Allow-Origin *", caddy)
-        self.assertIn("@cors_preflight", caddy)
-        self.assertIn("header_down Access-Control-Allow-Origin *", caddy)
-        self.assertIn("Access-Control-Request-Headers", caddy)
         self.assertIn("reverse_proxy matrix_guest_tuwunel:8008", caddy)
+        self.assertNotIn("Access-Control-Request-Headers", caddy)
         self.assertIn("call.example.com {", caddy)
         self.assertIn("@guest_home path / /login /register", caddy)
         self.assertIn("/srv/guest-call-landing", caddy)
@@ -722,7 +739,7 @@ class ApplyTests(unittest.TestCase):
         guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
         self.assertIn('server_name = "guest.example.com"', guest_tuwunel)
         self.assertIn("allow_room_creation = false", guest_tuwunel)
-        self.assertIn('allowed_remote_server_names_experimental = ["^example\\.com$"]', guest_tuwunel)
+        self.assertIn("allowed_remote_server_names_experimental = ['^example\\.com$']", guest_tuwunel)
         self.assertIn("livekit_url = \"https://livekit.example.com/livekit/jwt\"", guest_tuwunel)
 
         element_call_cfg = json.loads(
