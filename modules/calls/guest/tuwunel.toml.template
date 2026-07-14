@@ -21,4 +21,4 @@ livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
 allowed_remote_server_names_experimental = ["^{{GUEST_FEDERATION_ALLOW_REGEX}}$"]
 
 [global.well_known]
-client = "https://{{GUEST_MATRIX_DOMAIN}}"
+client = "https://{{GUEST_SERVER_NAME}}"

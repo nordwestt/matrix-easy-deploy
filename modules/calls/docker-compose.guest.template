@@ -3,4 +3,3 @@ services:
   lk-jwt-service:
     extra_hosts:
       "{{GUEST_SERVER_NAME}}": "host-gateway"
-      "{{GUEST_MATRIX_DOMAIN}}": "host-gateway"

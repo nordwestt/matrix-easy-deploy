@@ -679,7 +679,6 @@ class ApplyTests(unittest.TestCase):
             "enabled": True,
             "domain": "call.example.com",
             "server_name": "guest.example.com",
-            "matrix_domain": "matrix.guest.example.com",
         }
         self.write_config(cfg)
         ctx = apply.ApplyContext(self.root)
@@ -692,12 +691,12 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("LIVEKIT_FULL_ACCESS_HOMESERVERS=example.com,guest.example.com", env_text)
         self.assertIn(
             "LIVEKIT_CS_API_URL_OVERRIDES=example.com=https://matrix.example.com,"
-            "guest.example.com=https://matrix.guest.example.com",
+            "guest.example.com=https://guest.example.com",
             env_text,
         )
 
         caddy = (self.root / "caddy/Caddyfile").read_text()
-        self.assertIn("matrix.guest.example.com, guest.example.com {", caddy)
+        self.assertIn("guest.example.com {", caddy)
         self.assertIn("reverse_proxy matrix_guest_tuwunel:8008", caddy)
         self.assertIn("call.example.com {", caddy)
         self.assertIn("reverse_proxy matrix_element_call:8080", caddy)
@@ -712,7 +711,7 @@ class ApplyTests(unittest.TestCase):
         )
         self.assertEqual(
             element_call_cfg["default_server_config"]["m.homeserver"]["base_url"],
-            "https://matrix.guest.example.com",
+            "https://guest.example.com",
         )
         self.assertEqual(
             element_call_cfg["livekit"]["livekit_service_url"],
@@ -726,7 +725,7 @@ class ApplyTests(unittest.TestCase):
 
         guest_compose = (self.root / "modules/calls/docker-compose.guest.yml").read_text()
         self.assertIn("guest.example.com", guest_compose)
-        self.assertIn("matrix.guest.example.com", guest_compose)
+        self.assertEqual(guest_compose.count("guest.example.com"), 1)
 
     def test_apply_configuration_guest_access_disabled_omits_guest_blocks(self):
         cfg = self.sample_config()

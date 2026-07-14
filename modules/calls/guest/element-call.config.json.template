@@ -1,7 +1,7 @@
 {
     "default_server_config": {
         "m.homeserver": {
-            "base_url": "https://{{GUEST_MATRIX_DOMAIN}}",
+            "base_url": "https://{{GUEST_SERVER_NAME}}",
             "server_name": "{{GUEST_SERVER_NAME}}"
         },
         "org.matrix.msc4143.rtc_foci": [

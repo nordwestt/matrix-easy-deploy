@@ -608,8 +608,7 @@ features:
     guest_access:
       enabled: true
       domain: call.example.com              # default: call.{base_domain}
-      server_name: guest.example.com        # default: guest.{base_domain}
-      matrix_domain: matrix.guest.example.com
+      server_name: guest.example.com        # default: guest.{base_domain}; MXIDs and client API
 ```
 
 When enabled, Element Web uses your self-hosted Element Call URL for both registered users and guests (`element_call.url` and `guest_spa_url`). Guest accounts get MXIDs like `@alice:guest.example.com`.
@@ -619,8 +618,7 @@ DNS records (all pointing at your VPS):
 | Host | Purpose |
 |------|---------|
 | `call.example.com` | Element Call SPA (meeting links) |
-| `matrix.guest.example.com` | Guest Tuwunel client API |
-| `guest.example.com` | Guest `SERVER_NAME` / well-known |
+| `guest.example.com` | Guest Tuwunel (MXIDs and client API) |
 
 Note: if your main server is Tuwunel, call reliability may be reduced because Tuwunel lacks MSC4140 delayed events on the principal server. Synapse main + guest Tuwunel is the recommended combination.
 
@@ -1191,9 +1189,9 @@ When `features.calls.guest_access.enabled` is true, verify the guest stack is ru
 docker logs matrix_guest_tuwunel
 docker logs matrix_element_call
 curl -I https://call.example.com
-curl -I https://matrix.guest.example.com/_matrix/client/versions
+curl -I https://guest.example.com/_matrix/client/versions
 ```
-Guest access requires federation on the main server and DNS for the Element Call domain, guest Matrix API domain, and guest `SERVER_NAME`. The guest Tuwunel server federates only with your main server.
+Guest access requires federation on the main server and DNS for the Element Call domain and guest server domain. The guest Tuwunel server federates only with your main server.
 
 **1:1 calls fail or audio/video cuts out**
 

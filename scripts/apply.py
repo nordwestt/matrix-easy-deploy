@@ -476,12 +476,10 @@ def resolve_guest_access_values(config: dict) -> dict[str, str]:
 
     guest_server_name = str(guest.get("server_name") or f"guest.{base_domain}").strip()
     guest_call_domain = str(guest.get("domain") or f"call.{base_domain}").strip()
-    guest_matrix_domain = str(guest.get("matrix_domain") or f"matrix.{guest_server_name}").strip()
 
     return {
         "GUEST_SERVER_NAME": guest_server_name,
         "GUEST_CALL_DOMAIN": guest_call_domain,
-        "GUEST_MATRIX_DOMAIN": guest_matrix_domain,
         "GUEST_FEDERATION_ALLOW_REGEX": re.escape(server_name),
     }
 
@@ -499,6 +497,10 @@ def validate_calls_guest_access(config: dict) -> None:
         raise ValueError(
             f"features.calls.guest_access has unknown keys: {', '.join(sorted(unknown))}"
         )
+
+    if "matrix_domain" in guest:
+        # Legacy key — guest server_name now covers both MXIDs and the client API.
+        pass
 
     if "enabled" in guest:
         _require_bool(guest.get("enabled"), "features.calls.guest_access.enabled")
@@ -519,19 +521,15 @@ def validate_calls_guest_access(config: dict) -> None:
             "features.calls.guest_access.enabled is incompatible with features.registration_enabled=true"
         )
 
-    for key in ("domain", "server_name", "matrix_domain"):
+    for key in ("domain", "server_name"):
         if key in guest and guest[key] is not None:
             _require_str(guest.get(key), f"features.calls.guest_access.{key}")
 
 
-def build_caddy_guest_matrix_block(guest_matrix_domain: str, guest_server_name: str) -> str:
-    hosts = [guest_matrix_domain]
-    if guest_server_name != guest_matrix_domain:
-        hosts.append(guest_server_name)
-    hosts_line = ", ".join(hosts)
+def build_caddy_guest_matrix_block(guest_server_name: str) -> str:
     return (
         f"\n# Guest Tuwunel homeserver (Element Call external access)\n"
-        f"{hosts_line} {{\n"
+        f"{guest_server_name} {{\n"
         "    handle /_matrix/* {\n"
         "        reverse_proxy matrix_guest_tuwunel:8008\n"
         "    }\n\n"
@@ -581,11 +579,10 @@ def build_livekit_cs_api_url_overrides(
     matrix_domain: str,
     guest_enabled: bool,
     guest_server_name: str,
-    guest_matrix_domain: str,
 ) -> str:
     overrides = [f"{server_name}=https://{matrix_domain}"]
     if guest_enabled and guest_server_name:
-        overrides.append(f"{guest_server_name}=https://{guest_matrix_domain}")
+        overrides.append(f"{guest_server_name}=https://{guest_server_name}")
     return ",".join(overrides)
 
 
@@ -609,7 +606,7 @@ def build_element_call_guest_config(config: dict) -> dict:
     return {
         "default_server_config": {
             "m.homeserver": {
-                "base_url": f"https://{guest_values['GUEST_MATRIX_DOMAIN']}",
+                "base_url": f"https://{guest_values['GUEST_SERVER_NAME']}",
                 "server_name": guest_values["GUEST_SERVER_NAME"],
             },
             "org.matrix.msc4143.rtc_foci": [
@@ -965,7 +962,6 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         guest_values = resolve_guest_access_values(config)
         derived.update(guest_values)
         derived["CADDY_GUEST_MATRIX_BLOCK"] = build_caddy_guest_matrix_block(
-            guest_values["GUEST_MATRIX_DOMAIN"],
             guest_values["GUEST_SERVER_NAME"],
         )
         derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = build_caddy_element_call_site_block(
@@ -974,7 +970,6 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
     else:
         derived["GUEST_SERVER_NAME"] = ""
         derived["GUEST_CALL_DOMAIN"] = ""
-        derived["GUEST_MATRIX_DOMAIN"] = ""
         derived["GUEST_FEDERATION_ALLOW_REGEX"] = ""
         derived["CADDY_GUEST_MATRIX_BLOCK"] = ""
         derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = ""
@@ -989,7 +984,6 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         matrix_domain,
         guest_calls_enabled,
         derived.get("GUEST_SERVER_NAME", ""),
-        derived.get("GUEST_MATRIX_DOMAIN", ""),
     )
 
     if guest_calls_enabled and hs_spec.implementation == "tuwunel":

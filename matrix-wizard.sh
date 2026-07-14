@@ -161,7 +161,6 @@ edit_deploy_config() {
         _base_domain="$(extract_base_domain "$MATRIX_DOMAIN")"
         local _suggested_guest_call_domain="call.${_base_domain}"
         local _suggested_guest_server_name="guest.${_base_domain}"
-        local _suggested_guest_matrix_domain="matrix.guest.${_base_domain}"
 
         ENABLE_GUEST_ACCESS="false"
         if [[ "$ENABLE_FEDERATION" == "true" && "$ENABLE_REGISTRATION" != "true" ]]; then
@@ -179,22 +178,17 @@ edit_deploy_config() {
                 "Element Call domain  (e.g. call.example.com)" \
                 "${config_guest_call_domain:-$_suggested_guest_call_domain}"
             ask GUEST_SERVER_NAME \
-                "Guest MXID domain  (e.g. guest.example.com)" \
+                "Guest server domain  (e.g. guest.example.com — MXIDs and API)" \
                 "${config_guest_server_name:-$_suggested_guest_server_name}"
-            ask GUEST_MATRIX_DOMAIN \
-                "Guest Matrix API domain  (e.g. matrix.guest.example.com)" \
-                "${config_guest_matrix_domain:-$_suggested_guest_matrix_domain}"
         else
             GUEST_CALL_DOMAIN=""
             GUEST_SERVER_NAME=""
-            GUEST_MATRIX_DOMAIN=""
         fi
     else
         LIVEKIT_DOMAIN=""
         ENABLE_GUEST_ACCESS="false"
         GUEST_CALL_DOMAIN=""
         GUEST_SERVER_NAME=""
-        GUEST_MATRIX_DOMAIN=""
     fi
 
     echo
@@ -248,7 +242,6 @@ edit_deploy_config() {
         echo -e "    ${CYAN}${LIVEKIT_DOMAIN}${RESET}  →  <this server's IP>"
         if [[ "$ENABLE_GUEST_ACCESS" == "true" ]]; then
             echo -e "    ${CYAN}${GUEST_CALL_DOMAIN}${RESET}  →  <this server's IP>"
-            echo -e "    ${CYAN}${GUEST_MATRIX_DOMAIN}${RESET}  →  <this server's IP>"
             echo -e "    ${CYAN}${GUEST_SERVER_NAME}${RESET}  →  <this server's IP>"
         fi
     fi
@@ -278,7 +271,6 @@ edit_deploy_config() {
         --guest-access-enabled "$ENABLE_GUEST_ACCESS" \
         --guest-call-domain "$GUEST_CALL_DOMAIN" \
         --guest-server-name "$GUEST_SERVER_NAME" \
-        --guest-matrix-domain "$GUEST_MATRIX_DOMAIN" \
         --local-login-enabled "$LOCAL_LOGIN_ENABLED"
     if [[ "$SERVER_IMPLEMENTATION" == "synapse" ]]; then
         python3 "${SCRIPT_DIR}/scripts/config_edit.py" \

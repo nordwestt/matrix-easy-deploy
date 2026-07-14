@@ -160,7 +160,6 @@ def update_core_config(
     guest_access_enabled: bool | None = None,
     guest_call_domain: str | None = None,
     guest_server_name: str | None = None,
-    guest_matrix_domain: str | None = None,
 ) -> None:
     matrix = config.setdefault("matrix", {})
     if not isinstance(matrix, dict):
@@ -233,11 +232,7 @@ def update_core_config(
     elif "server_name" not in guest_access:
         guest_access["server_name"] = f"guest.{base_domain}"
 
-    resolved_guest_server = guest_access.get("server_name", f"guest.{base_domain}")
-    if guest_matrix_domain:
-        guest_access["matrix_domain"] = guest_matrix_domain
-    elif "matrix_domain" not in guest_access:
-        guest_access["matrix_domain"] = f"matrix.{resolved_guest_server}"
+    guest_access.pop("matrix_domain", None)
 
 
 def oidc_json_to_deploy_providers(providers_json: str) -> list:
@@ -385,7 +380,6 @@ def emit_wizard_defaults(config: dict) -> str:
         ),
         "config_guest_call_domain": guest_access.get("domain", ""),
         "config_guest_server_name": guest_access.get("server_name", ""),
-        "config_guest_matrix_domain": guest_access.get("matrix_domain", ""),
         "config_local_login_default": shell_bool_default(
             to_bool(features.get("local_login_enabled", True)), yes_default="y", no_default="n"
         ),
@@ -478,7 +472,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--guest-access-enabled")
     parser.add_argument("--guest-call-domain")
     parser.add_argument("--guest-server-name")
-    parser.add_argument("--guest-matrix-domain")
     parser.add_argument("--server-implementation")
     parser.add_argument("--local-login-enabled")
     parser.add_argument("--sso-enabled")
@@ -574,7 +567,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
             guest_call_domain=args.guest_call_domain,
             guest_server_name=args.guest_server_name,
-            guest_matrix_domain=args.guest_matrix_domain,
         )
         save(deploy_yaml, config)
         return 0

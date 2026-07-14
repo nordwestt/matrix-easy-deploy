@@ -70,10 +70,8 @@ features:
       enabled: false
       # Element Call SPA domain (meeting links like https://call.example.com/roomId)
       domain: call.example.com
-      # MXID domain for guest accounts (@alice:guest.example.com)
+      # Guest homeserver domain — MXIDs (@alice:guest.example.com) and client API
       server_name: guest.example.com
-      # Guest homeserver client API (defaults to matrix.{server_name})
-      matrix_domain: matrix.guest.example.com
   local_login_enabled: true
   sso:
     enabled: false
