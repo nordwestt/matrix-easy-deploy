@@ -2110,8 +2110,10 @@ def apply_configuration(
                 "Guest federation: Matrix hostnames resolve to Caddy on caddy_net "
                 f"(caddy/docker-compose.guest.yml). After apply, verify with:\n"
                 f"  docker exec matrix_synapse getent hosts {guest_server_name}\n"
-                "  docker exec matrix_synapse wget -qO- "
-                f"https://{guest_server_name}/_matrix/key/v2/server/{guest_server_name}"
+                "  docker exec matrix_synapse curl -fsS "
+                f"https://{guest_server_name}/.well-known/matrix/server\n"
+                "  docker exec matrix_synapse curl -fsS "
+                f"https://{guest_server_name}/_matrix/key/v2/server"
             )
         if env_vars.get("GUEST_ACCESS_TUWUNEL_MAIN_WARNING"):
             print(env_vars["GUEST_ACCESS_TUWUNEL_MAIN_WARNING"])

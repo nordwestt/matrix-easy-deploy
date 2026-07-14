@@ -24,5 +24,7 @@ allowed_remote_server_names_experimental = ['^{{GUEST_FEDERATION_ALLOW_REGEX}}$'
 
 [global.well_known]
 client = "https://{{GUEST_SERVER_NAME}}"
+# Tell federating homeservers (Synapse) to reach us on 443 via Caddy, not 8448.
+server = "{{GUEST_SERVER_NAME}}:443"
 # MatrixRTC — use the main server's LiveKit SFU (must be under [global.well_known]).
 livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"

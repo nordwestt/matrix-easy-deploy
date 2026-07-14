@@ -142,6 +142,7 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             'allowed_remote_server_names_experimental = [\'^{{GUEST_FEDERATION_ALLOW_REGEX}}$\']\n'
             "[global.well_known]\n"
             'client = "https://{{GUEST_SERVER_NAME}}"\n'
+            'server = "{{GUEST_SERVER_NAME}}:443"\n'
             'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
         )
         (root / "caddy/docker-compose.guest.template").write_text(

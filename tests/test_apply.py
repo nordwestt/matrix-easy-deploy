@@ -768,6 +768,7 @@ class ApplyTests(unittest.TestCase):
             guest_tuwunel,
         )
         self.assertIn("[global.well_known]", guest_tuwunel)
+        self.assertIn('server = "guest.example.com:443"', guest_tuwunel)
         self.assertIn("livekit_url = \"https://livekit.example.com/livekit/jwt\"", guest_tuwunel)
 
         element_call_cfg = json.loads(
