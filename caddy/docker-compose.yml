@@ -10,6 +10,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./guest-call-landing:/srv/guest-call-landing:ro
+      - ./guest-call-branding:/srv/guest-call-branding:ro
       - caddy_data:/data
       - caddy_config:/config
     extra_hosts:

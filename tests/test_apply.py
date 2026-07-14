@@ -759,6 +759,8 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("call.example.com {", caddy)
         self.assertIn("@guest_home path / /login /register", caddy)
         self.assertIn("/srv/guest-call-landing", caddy)
+        self.assertIn("/guest-call.css", caddy)
+        self.assertIn("/srv/guest-call-branding", caddy)
         self.assertIn("reverse_proxy matrix_element_call:8080", caddy)
 
         guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
@@ -785,6 +787,7 @@ class ApplyTests(unittest.TestCase):
             element_call_cfg["livekit"]["livekit_service_url"],
             "https://livekit.example.com/livekit/jwt",
         )
+        self.assertEqual(element_call_cfg.get("ssla"), "")
 
         element = json.loads((self.root / "modules/core/element/config.json").read_text())
         self.assertEqual(element["element_call"]["url"], "https://call.example.com")

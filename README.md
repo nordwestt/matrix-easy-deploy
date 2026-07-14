@@ -650,11 +650,13 @@ curl -s "https://element.example.com/config.json" | jq '.element_call'
 # Expect: "url" and "guest_spa_url" both pointing at https://call.example.com
 ```
 
-After changing guest-call settings, restart Caddy so the landing page volume is picked up:
+After changing guest-call settings, restart Caddy so the landing page and branding CSS are picked up:
 
 ```bash
-docker compose -f caddy/docker-compose.yml up -d
+cd caddy && docker compose -f docker-compose.yml -f docker-compose.guest.yml up -d --force-recreate caddy
 ```
+
+The guest Element Call SPA hides Element’s SSLA text and post-call “create an account” prompts via `caddy/guest-call-branding/guest-call.css` (injected automatically). Guests only enter a display name and join — accounts remain throwaway.
 
 DNS records (all pointing at your VPS):
 

@@ -643,8 +643,20 @@ def build_caddy_element_call_site_block(guest_call_domain: str) -> str:
         "        rewrite * /index.html\n"
         "        file_server\n"
         "    }\n\n"
+        "    handle /guest-call.css {\n"
+        "        root * /srv/guest-call-branding\n"
+        "        file_server\n"
+        "    }\n\n"
         "    handle {\n"
-        "        reverse_proxy matrix_element_call:8080\n"
+        "        reverse_proxy matrix_element_call:8080 {\n"
+        "            @html header Content-Type text/html*\n"
+        "            handle_response @html {\n"
+        "                replace {\n"
+        '                    search "</head>"\n'
+        '                    replace "<link rel=\\"stylesheet\\" href=\\"/guest-call.css\\"></head>"\n'
+        "                }\n"
+        "            }\n"
+        "        }\n"
         "    }\n\n"
         "    header {\n"
         "        Access-Control-Allow-Origin *\n"
@@ -706,6 +718,8 @@ def build_element_call_guest_config(config: dict) -> dict:
         "livekit": {
             "livekit_service_url": jwt_url,
         },
+        # Omit Element's corporate SSLA; guest-call.css hides any remaining legal line.
+        "ssla": "",
     }
 
 

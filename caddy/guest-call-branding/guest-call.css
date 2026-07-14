@@ -1,0 +1,24 @@
+/*
+ * Self-hosted guest-call UX overrides for Element Call.
+ * Hides Element SSLA boilerplate and throwaway-account upsell prompts.
+ */
+
+/* Pre-join: SSLA line and "Create an account" footer */
+body[data-platform] .container > .footer {
+  display: none !important;
+}
+
+body[data-platform] .container .main form *:has(> a[href]) {
+  display: none !important;
+}
+
+/* Post-call: feedback survey and "set up a password" upsell */
+body[data-platform] .callEndedContent {
+  display: none !important;
+}
+
+/* Register/login prompts elsewhere in the SPA */
+body[data-platform] a[href="/register"],
+body[data-platform] a[href="/login"] {
+  display: none !important;
+}
