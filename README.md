@@ -635,6 +635,14 @@ Generate a guest link from the shell (e.g. after copying the room ID from Elemen
 bash scripts/call-link.sh '!AdAczRpx:example.com'
 ```
 
+**Room access for guest calls:** Element Call checks the room summary API (MSC3266) before joining. The room must use join rule **Public** or **Ask to join** — not invite-only or restricted (common when a room lives under a Space). “Public” in Element’s room directory is not the same as join rule Public. Verify from your server:
+
+```bash
+bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
+```
+
+If `join_rule` is `invite` or `restricted`, change the room in Element → Room settings → Access → **Anyone can join** or **Ask to join**, then retry in a fresh browser tab (Element Call caches room summaries).
+
 Verify Element Web picked up the config (hard-refresh the client after `apply.sh`):
 
 ```bash
@@ -1227,6 +1235,14 @@ curl -I https://call.example.com
 curl -I https://guest.example.com/_matrix/client/versions
 ```
 Guest access requires federation on the main server and DNS for the Element Call domain and guest server domain. The guest Tuwunel server federates only with your main server.
+
+If guests register but Element Call says the room is “not joinable” / private, federation is usually fine — the room join rule is wrong for guests. Check:
+
+```bash
+bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
+```
+
+`join_rule` must be `public` or `knock`. Invite-only or restricted rooms fail before join. Earlier successful attempts may have occurred when the summary request failed and Element Call fell back to a direct join.
 
 **1:1 calls fail or audio/video cuts out**
 
