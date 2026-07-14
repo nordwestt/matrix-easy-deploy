@@ -464,6 +464,16 @@ def guest_access_enabled(calls: dict) -> bool:
     return bool(get_guest_access_config(calls).get("enabled", False))
 
 
+def format_compose_extra_hosts(*hostnames: str) -> str:
+    """YAML extra_hosts lines for docker compose (deduplicated, stable order)."""
+    seen: list[str] = []
+    for hostname in hostnames:
+        host = (hostname or "").strip()
+        if host and host not in seen:
+            seen.append(host)
+    return "\n".join(f'      "{host}": "host-gateway"' for host in seen)
+
+
 def resolve_guest_access_values(config: dict) -> dict[str, str]:
     matrix = config.get("matrix", {}) if isinstance(config.get("matrix", {}), dict) else {}
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
@@ -999,6 +1009,10 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
     if guest_calls_enabled:
         guest_values = resolve_guest_access_values(config)
         derived.update(guest_values)
+        derived["GUEST_TUWUNEL_EXTRA_HOSTS"] = format_compose_extra_hosts(
+            server_name,
+            matrix_domain,
+        )
         derived["CADDY_GUEST_MATRIX_BLOCK"] = build_caddy_guest_matrix_block(
             guest_values["GUEST_SERVER_NAME"],
         )
@@ -1009,6 +1023,7 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         derived["GUEST_SERVER_NAME"] = ""
         derived["GUEST_CALL_DOMAIN"] = ""
         derived["GUEST_FEDERATION_ALLOW_REGEX"] = ""
+        derived["GUEST_TUWUNEL_EXTRA_HOSTS"] = ""
         derived["CADDY_GUEST_MATRIX_BLOCK"] = ""
         derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = ""
 

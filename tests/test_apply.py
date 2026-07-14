@@ -704,6 +704,26 @@ class ApplyTests(unittest.TestCase):
             guest_tuwunel,
         )
 
+    def test_apply_configuration_guest_access_dedupes_extra_hosts_when_domains_match(self):
+        cfg = self.sample_config()
+        cfg["matrix"]["domain"] = "matrix.nordwestt.com"
+        cfg["matrix"]["server_name"] = "matrix.nordwestt.com"
+        cfg["features"]["calls"]["guest_access"] = {
+            "enabled": True,
+            "domain": "call.nordwestt.com",
+            "server_name": "matrix-guest.nordwestt.com",
+        }
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        guest_compose = (self.root / "modules/calls/docker-compose.guest.yml").read_text()
+        self.assertEqual(
+            guest_compose.count('"matrix.nordwestt.com": "host-gateway"'),
+            1,
+        )
+
     def test_apply_configuration_guest_access_renders_guest_stack(self):
         cfg = self.sample_config()
         cfg["features"]["calls"]["guest_access"] = {
@@ -763,7 +783,8 @@ class ApplyTests(unittest.TestCase):
 
         guest_compose = (self.root / "modules/calls/docker-compose.guest.yml").read_text()
         self.assertIn("guest.example.com", guest_compose)
-        self.assertIn("example.com", guest_compose)
+        self.assertIn('      "example.com": "host-gateway"', guest_compose)
+        self.assertIn('      "matrix.example.com": "host-gateway"', guest_compose)
         self.assertIn("guest-tuwunel:", guest_compose)
 
         core_guest_compose = (self.root / "modules/core/docker-compose.guest.yml").read_text()

@@ -5,5 +5,4 @@ services:
       "{{GUEST_SERVER_NAME}}": "host-gateway"
   guest-tuwunel:
     extra_hosts:
-      "{{SERVER_NAME}}": "host-gateway"
-      "{{MATRIX_DOMAIN}}": "host-gateway"
+{{GUEST_TUWUNEL_EXTRA_HOSTS}}
