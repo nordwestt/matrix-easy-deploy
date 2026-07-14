@@ -1242,7 +1242,13 @@ If guests register but Element Call says the room is “not joinable” / privat
 bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
 ```
 
-`join_rule` must be `public` or `knock` on the **guest homeserver** summary (what Element Call fetches), not only on the main server. Invite-only or restricted rooms fail before join. If the main server says `public` but guests still fail, compare both probes from `guest-call-room-check.sh` — a missing or nested `join_rule` from guest Tuwunel triggers the same “not joinable” error. Earlier successful attempts may have occurred when the summary request failed and Element Call fell back to a direct join.
+`join_rule` must be `public` or `knock` on the **guest homeserver** summary (what Element Call fetches), not only on the main server. Invite-only or restricted rooms fail before join. If the main server says `public` but the guest probe shows `join_rule (missing)`, guest Tuwunel’s federated summary is incomplete — Element Call then shows “not joinable”. `apply.sh` routes room-summary requests on the guest domain to the main homeserver to avoid this. After `bash apply.sh`, recreate Caddy:
+
+```bash
+cd caddy && docker compose -f docker-compose.yml -f docker-compose.guest.yml up -d --force-recreate caddy
+```
+
+Re-run `guest-call-room-check.sh`; the guest probe should then show `join_rule: public`. Earlier successful attempts may have occurred when the summary request failed and Element Call fell back to a direct join.
 
 **1:1 calls fail or audio/video cuts out**
 

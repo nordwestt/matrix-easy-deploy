@@ -586,10 +586,25 @@ def build_guest_call_share_url(
     return f"https://{call_domain}/room/#/{room_id}?{'&'.join(params)}"
 
 
-def build_caddy_guest_matrix_block(guest_server_name: str) -> str:
+def build_caddy_guest_matrix_block(
+    guest_server_name: str,
+    *,
+    main_homeserver_upstream: str,
+) -> str:
     return (
         f"\n# Guest Tuwunel homeserver (Element Call external access)\n"
         f"{guest_server_name} {{\n"
+        "    # Call rooms live on the main homeserver. Guest Tuwunel's federated room\n"
+        "    # summary can omit join_rule; Element Call then treats the room as private.\n"
+        "    # Peek summaries from the main homeserver (unauthenticated for public rooms).\n"
+        "    handle /_matrix/client/v1/room_summary/* {\n"
+        "        header_up -Authorization\n"
+        f"        reverse_proxy {main_homeserver_upstream}\n"
+        "    }\n"
+        "    handle /_matrix/client/unstable/im.nheko.summary/* {\n"
+        "        header_up -Authorization\n"
+        f"        reverse_proxy {main_homeserver_upstream}\n"
+        "    }\n\n"
         "    handle /_matrix/* {\n"
         "        header Access-Control-Allow-Origin *\n"
         "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
@@ -1054,6 +1069,7 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         )
         derived["CADDY_GUEST_MATRIX_BLOCK"] = build_caddy_guest_matrix_block(
             guest_values["GUEST_SERVER_NAME"],
+            main_homeserver_upstream=derived["HOMESERVER_UPSTREAM"],
         )
         derived["CADDY_ELEMENT_CALL_SITE_BLOCK"] = build_caddy_element_call_site_block(
             guest_values["GUEST_CALL_DOMAIN"]

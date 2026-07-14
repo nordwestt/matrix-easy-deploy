@@ -33,7 +33,8 @@ GUEST_CALL_HINTS = {
     "private": "Not joinable for guests — room join rule is private.",
     "(missing)": (
         "Not joinable for guests — Element Call treats a summary without join_rule as private. "
-        "This often means the guest homeserver returned an MSC3266 wrapper or incomplete federated summary."
+        "Guest Tuwunel often omits join_rule when federating; re-run apply.sh so Caddy proxies "
+        "room-summary requests to the main homeserver, then recreate the caddy container."
     ),
 }
 
@@ -235,11 +236,12 @@ def main(argv: list[str] | None = None) -> int:
         else:
             guest_rule = rule
 
-    if main_rule == "public" and guest_rule and guest_rule != "public":
+    if main_rule == "public" and guest_rule and guest_rule not in JOINABLE_RULES:
         print(
-            "Mismatch: main Synapse reports a joinable room, but the guest homeserver summary "
-            "is what Element Call uses — fix or upgrade guest Tuwunel, or retry in a private "
-            "browser window in case an old summary is cached."
+            "Mismatch: main homeserver reports a joinable room, but the guest summary is what "
+            "Element Call uses. If join_rule is missing, run apply.sh and recreate Caddy "
+            "(see README guest-call troubleshooting). Also retry in a private browser window "
+            "in case an old summary is cached."
         )
         exit_code = max(exit_code, 2)
 
