@@ -147,6 +147,15 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
         (root / "modules/calls/docker-compose.guest.template").write_text(
             'services:\n  lk-jwt-service:\n    extra_hosts:\n'
             '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
+            '  guest-tuwunel:\n    extra_hosts:\n'
+            '      "{{SERVER_NAME}}": "host-gateway"\n'
+            '      "{{MATRIX_DOMAIN}}": "host-gateway"\n'
+        )
+        (root / "modules/core/docker-compose.guest.template").write_text(
+            'services:\n  synapse:\n    extra_hosts:\n'
+            '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
+            '  tuwunel:\n    extra_hosts:\n'
+            '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
         )
         (root / "modules/core/synapse/homeserver.yaml.template").write_text(
             "server_name: {{SERVER_NAME}}\n"

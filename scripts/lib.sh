@@ -243,6 +243,14 @@ load_runtime_desired_state() {
     fi
 }
 
+# Compose file list for modules/core/docker-compose.yml (optional guest federation overlay).
+build_core_compose_args() {
+    CORE_COMPOSE_ARGS=(-f docker-compose.yml)
+    if [[ -f "${1}/modules/core/docker-compose.guest.yml" ]]; then
+        CORE_COMPOSE_ARGS+=(-f docker-compose.guest.yml)
+    fi
+}
+
 # Compose profiles for modules/core/docker-compose.yml
 # Start only the selected homeserver; stop all homeserver profiles so nothing is left running.
 build_core_compose_start_profiles() {

@@ -763,7 +763,13 @@ class ApplyTests(unittest.TestCase):
 
         guest_compose = (self.root / "modules/calls/docker-compose.guest.yml").read_text()
         self.assertIn("guest.example.com", guest_compose)
-        self.assertEqual(guest_compose.count("guest.example.com"), 1)
+        self.assertIn("example.com", guest_compose)
+        self.assertIn("guest-tuwunel:", guest_compose)
+
+        core_guest_compose = (self.root / "modules/core/docker-compose.guest.yml").read_text()
+        self.assertIn("guest.example.com", core_guest_compose)
+        self.assertIn("synapse:", core_guest_compose)
+        self.assertIn("tuwunel:", core_guest_compose)
 
     def test_apply_configuration_guest_access_disabled_omits_guest_blocks(self):
         cfg = self.sample_config()
@@ -777,6 +783,7 @@ class ApplyTests(unittest.TestCase):
         self.assertNotIn("matrix_guest_tuwunel", caddy)
         self.assertNotIn("matrix_element_call", caddy)
         self.assertFalse((self.root / "modules/calls/docker-compose.guest.yml").exists())
+        self.assertFalse((self.root / "modules/core/docker-compose.guest.yml").exists())
 
         env_text = (self.root / ".env").read_text()
         self.assertIn("GUEST_ACCESS_ENABLED=false", env_text)

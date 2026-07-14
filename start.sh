@@ -28,7 +28,8 @@ fi
 load_runtime_desired_state "${SCRIPT_DIR}"
 
 build_core_compose_start_profiles
-(cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" up -d)
+build_core_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" up -d)
 
 if [[ "${MAS_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/mas/config.yaml" ]]; then
     bootstrap_mas_database "${SCRIPT_DIR}"

@@ -1657,10 +1657,18 @@ def render_templates(ctx: ApplyContext, config: dict, env_vars: dict) -> None:
         guest_compose_dest = ctx.project_root / "modules" / "calls" / "docker-compose.guest.yml"
         render_template(guest_compose_template, guest_compose_dest, env_vars)
         fail_if_unresolved_placeholder(guest_compose_dest)
+
+        core_guest_compose_template = ctx.project_root / "modules" / "core" / "docker-compose.guest.template"
+        core_guest_compose_dest = ctx.project_root / "modules" / "core" / "docker-compose.guest.yml"
+        render_template(core_guest_compose_template, core_guest_compose_dest, env_vars)
+        fail_if_unresolved_placeholder(core_guest_compose_dest)
     else:
         guest_compose_dest = ctx.project_root / "modules" / "calls" / "docker-compose.guest.yml"
         if guest_compose_dest.exists():
             guest_compose_dest.unlink()
+        core_guest_compose_dest = ctx.project_root / "modules" / "core" / "docker-compose.guest.yml"
+        if core_guest_compose_dest.exists():
+            core_guest_compose_dest.unlink()
 
     if env_vars.get("MAS_ENABLED") == "true":
         mas_template = ctx.project_root / "modules" / "mas" / "config.yaml.template"

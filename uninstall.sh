@@ -197,6 +197,7 @@ main() {
         "modules/calls/coturn/turnserver.conf"
         "modules/calls/livekit/livekit.yaml"
         "modules/calls/docker-compose.guest.yml"
+        "modules/core/docker-compose.guest.yml"
         "modules/calls/guest/tuwunel.toml"
         "modules/calls/guest/element-call.config.json"
         "modules/calls/guest/tuwunel_data"

@@ -23,6 +23,7 @@ if [[ -f "${SCRIPT_DIR}/modules/mas/config.yaml" ]]; then
 fi
 
 build_core_compose_stop_profiles
+build_core_compose_args "${SCRIPT_DIR}"
 
 # Stop WhatsApp bridge when its module was previously installed
 if [[ -f "${SCRIPT_DIR}/modules/whatsapp-bridge/whatsapp/config.yaml" ]]; then
@@ -47,7 +48,7 @@ build_calls_compose_args "${SCRIPT_DIR}"
 (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" down)
 
 info "Stopping core services…"
-(cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans)
+(cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans)
 
 info "Stopping Caddy…"
 (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" down)
