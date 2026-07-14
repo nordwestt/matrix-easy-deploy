@@ -17,7 +17,8 @@ allow_room_creation = false
 allow_federation = true
 allow_public_room_directory_over_federation = false
 
-# Federate only with the principal homeserver.
+# Federate only with the principal homeserver and this guest server (Tuwunel requires
+# its own server_name in the allow-list or outbound federation PDUs are dropped).
 # Single-quoted: regex backslashes are literal in TOML (double quotes treat \. as invalid escapes).
 allowed_remote_server_names_experimental = ['^{{GUEST_FEDERATION_ALLOW_REGEX}}$']
 

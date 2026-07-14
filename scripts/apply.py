@@ -487,10 +487,21 @@ def resolve_guest_access_values(config: dict) -> dict[str, str]:
     guest_server_name = str(guest.get("server_name") or f"guest.{base_domain}").strip()
     guest_call_domain = str(guest.get("domain") or f"call.{base_domain}").strip()
 
+    # Tuwunel's federation allow-list must include this server itself (issue #489) as well
+    # as the principal homeserver, or outbound join/send fails after make_join.
+    federation_peers: list[str] = []
+    for peer in (server_name, guest_server_name):
+        if peer and peer not in federation_peers:
+            federation_peers.append(peer)
+    if len(federation_peers) == 1:
+        federation_regex = re.escape(federation_peers[0])
+    else:
+        federation_regex = "(?:" + "|".join(re.escape(peer) for peer in federation_peers) + ")"
+
     return {
         "GUEST_SERVER_NAME": guest_server_name,
         "GUEST_CALL_DOMAIN": guest_call_domain,
-        "GUEST_FEDERATION_ALLOW_REGEX": re.escape(server_name),
+        "GUEST_FEDERATION_ALLOW_REGEX": federation_regex,
     }
 
 
