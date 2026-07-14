@@ -697,12 +697,17 @@ class ApplyTests(unittest.TestCase):
 
         caddy = (self.root / "caddy/Caddyfile").read_text()
         self.assertIn("guest.example.com {", caddy)
+        self.assertIn("Access-Control-Allow-Origin *", caddy)
+        self.assertIn("@cors_preflight method OPTIONS", caddy)
         self.assertIn("reverse_proxy matrix_guest_tuwunel:8008", caddy)
         self.assertIn("call.example.com {", caddy)
+        self.assertIn("@guest_home path / /login /register", caddy)
+        self.assertIn("/srv/guest-call-landing", caddy)
         self.assertIn("reverse_proxy matrix_element_call:8080", caddy)
 
         guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
         self.assertIn('server_name = "guest.example.com"', guest_tuwunel)
+        self.assertIn("allow_room_creation = false", guest_tuwunel)
         self.assertIn('allowed_remote_server_names_experimental = ["^example\\.com$"]', guest_tuwunel)
         self.assertIn("livekit_url = \"https://livekit.example.com/livekit/jwt\"", guest_tuwunel)
 

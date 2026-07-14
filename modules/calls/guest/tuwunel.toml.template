@@ -11,6 +11,9 @@ port = 8008
 allow_registration = true
 yes_i_am_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
 
+# Guests join meetings on the main server — they must not create rooms/calls here.
+allow_room_creation = false
+
 allow_federation = true
 allow_public_room_directory_over_federation = false
 

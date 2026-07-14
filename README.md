@@ -613,6 +613,19 @@ features:
 
 When enabled, Element Web uses your self-hosted Element Call URL for both registered users and guests (`element_call.url` and `guest_spa_url`). Guest accounts get MXIDs like `@alice:guest.example.com`.
 
+**How it works (Google Meet style):**
+
+- Employees on your main server create calls/rooms in Element Web and share the guest link with externals.
+- Externals open the shared link (for example `https://call.example.com/room/#/WeeklySync?roomId=...&intent=join_existing`) — a guest account is created automatically in the background.
+- Visiting `https://call.example.com/` alone shows a simple “join your meeting” page — no login or register buttons.
+- The guest homeserver allows registration but **blocks room creation**; only your main server can create rooms/calls.
+
+After changing guest-call settings, restart Caddy so the landing page volume is picked up:
+
+```bash
+docker compose -f caddy/docker-compose.yml up -d
+```
+
 DNS records (all pointing at your VPS):
 
 | Host | Purpose |

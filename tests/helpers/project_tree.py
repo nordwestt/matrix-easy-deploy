@@ -136,6 +136,8 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
         (root / "modules/calls/guest").mkdir(parents=True, exist_ok=True)
         (root / "modules/calls/guest/tuwunel.toml.template").write_text(
             'server_name = "{{GUEST_SERVER_NAME}}"\n'
+            "allow_registration = true\n"
+            "allow_room_creation = false\n"
             'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
             'allowed_remote_server_names_experimental = ["^{{GUEST_FEDERATION_ALLOW_REGEX}}$"]\n'
         )

@@ -527,11 +527,24 @@ def validate_calls_guest_access(config: dict) -> None:
 
 
 def build_caddy_guest_matrix_block(guest_server_name: str) -> str:
+    cors_headers = (
+        "        header Access-Control-Allow-Origin *\n"
+        '        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
+        '        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"\n'
+    )
     return (
         f"\n# Guest Tuwunel homeserver (Element Call external access)\n"
         f"{guest_server_name} {{\n"
         "    handle /_matrix/* {\n"
-        "        reverse_proxy matrix_guest_tuwunel:8008\n"
+        "        @cors_preflight method OPTIONS\n"
+        "        handle @cors_preflight {\n"
+        f"{cors_headers}"
+        '            respond "" 204\n'
+        "        }\n\n"
+        f"{cors_headers}"
+        "        reverse_proxy matrix_guest_tuwunel:8008 {\n"
+        "            header_down -Access-Control-Allow-Origin\n"
+        "        }\n"
         "    }\n\n"
         "    handle /.well-known/matrix/* {\n"
         "        header Access-Control-Allow-Origin *\n"
@@ -556,13 +569,20 @@ def build_caddy_element_call_site_block(guest_call_domain: str) -> str:
     return (
         f"\n# Element Call SPA (standalone meeting links)\n"
         f"{guest_call_domain} {{\n"
+        "    # Hide login/register UI — guests join only via shared meeting links.\n"
+        "    @guest_home path / /login /register\n"
+        "    handle @guest_home {\n"
+        "        root * /srv/guest-call-landing\n"
+        "        rewrite * /index.html\n"
+        "        file_server\n"
+        "    }\n\n"
         "    handle {\n"
         "        reverse_proxy matrix_element_call:8080\n"
         "    }\n\n"
         "    header {\n"
         "        Access-Control-Allow-Origin *\n"
-        "        Access-Control-Allow-Methods \"GET, POST, OPTIONS\"\n"
-        "        Access-Control-Allow-Headers \"Authorization, Content-Type\"\n"
+        '        Access-Control-Allow-Methods "GET, POST, OPTIONS"\n'
+        '        Access-Control-Allow-Headers "Authorization, Content-Type"\n'
         "        X-Content-Type-Options nosniff\n"
         "        X-Frame-Options SAMEORIGIN\n"
         "        Referrer-Policy strict-origin-when-cross-origin\n"
