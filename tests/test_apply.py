@@ -796,6 +796,10 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("guest.example.com", core_guest_compose)
         self.assertIn("synapse:", core_guest_compose)
         self.assertIn("tuwunel:", core_guest_compose)
+        self.assertIn("1.1.1.1", core_guest_compose)
+
+        synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
+        self.assertIn('ip_range_whitelist:\n  - "172.16.0.0/12"', synapse)
 
     def test_apply_configuration_guest_access_disabled_omits_guest_blocks(self):
         cfg = self.sample_config()
@@ -818,6 +822,9 @@ class ApplyTests(unittest.TestCase):
         element = json.loads((self.root / "modules/core/element/config.json").read_text())
         self.assertEqual(element["element_call"]["url"], "https://call.element.io")
         self.assertNotIn("guest_spa_url", element["element_call"])
+
+        synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
+        self.assertNotIn("ip_range_whitelist", synapse)
 
     def test_validate_guest_access_requires_federation(self):
         cfg = self.sample_config()

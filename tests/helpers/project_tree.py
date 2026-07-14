@@ -153,8 +153,10 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
         (root / "modules/core/docker-compose.guest.template").write_text(
             'services:\n  synapse:\n    extra_hosts:\n'
             '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
+            '    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n'
             '  tuwunel:\n    extra_hosts:\n'
             '      "{{GUEST_SERVER_NAME}}": "host-gateway"\n'
+            '    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n'
         )
         (root / "modules/core/synapse/homeserver.yaml.template").write_text(
             "server_name: {{SERVER_NAME}}\n"
@@ -178,6 +180,8 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "  transports:\n"
             "    - type: livekit\n"
             "      livekit_service_url: \"https://{{LIVEKIT_DOMAIN}}/livekit/jwt\"\n"
+            "allow_public_rooms_over_federation: {{ALLOW_PUBLIC_ROOMS_FEDERATION}}\n"
+            "{{SYNAPSE_GUEST_FEDERATION_SECTION}}\n"
             "max_event_delay_duration: 24h\n"
             "rc_message:\n"
             "  per_second: 0.5\n"

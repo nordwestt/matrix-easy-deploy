@@ -107,6 +107,7 @@ federation_domain_whitelist: {{FEDERATION_WHITELIST}}
 
 # Allow any other homeserver to fetch the server’s public rooms directory via federation
 allow_public_rooms_over_federation: {{ALLOW_PUBLIC_ROOMS_FEDERATION}}
+{{SYNAPSE_GUEST_FEDERATION_SECTION}}
 
 # ----------------------------------------------------------------------------
 # Retention / limits (sensible defaults for a small server)

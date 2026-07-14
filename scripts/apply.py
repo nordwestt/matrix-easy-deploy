@@ -72,6 +72,7 @@ ENV_FILE_EXCLUDED_KEYS = frozenset(
         "SYNAPSE_MAS_EXPERIMENTAL_SECTION",
         "SYNAPSE_MAS_WELL_KNOWN_SECTION",
         "SYNAPSE_AUTO_JOIN_SECTION",
+        "SYNAPSE_GUEST_FEDERATION_SECTION",
         "TUWUNEL_AUTO_JOIN_SECTION",
     }
 )
@@ -737,6 +738,19 @@ def build_synapse_auto_join_section(auto_join: dict, server_name: str = "") -> s
     return "\n".join(lines)
 
 
+def build_synapse_guest_federation_section(guest_enabled: bool) -> str:
+    if not guest_enabled:
+        return ""
+    return (
+        "\n"
+        "# Guest Element Call — Synapse reaches the guest homeserver via Docker\n"
+        "# host-gateway (see modules/core/docker-compose.guest.yml extra_hosts).\n"
+        "# Without this whitelist, Synapse drops the private bridge IP and key fetches fail.\n"
+        "ip_range_whitelist:\n"
+        '  - "172.16.0.0/12"\n'
+    )
+
+
 def build_tuwunel_auto_join_section(auto_join: dict, server_name: str = "") -> str:
     rooms = auto_join.get("rooms") or []
     if not rooms:
@@ -1017,6 +1031,9 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
 
     guest_calls_enabled = calls_enabled and guest_access_enabled(calls)
     derived["GUEST_ACCESS_ENABLED"] = "true" if guest_calls_enabled else "false"
+    derived["SYNAPSE_GUEST_FEDERATION_SECTION"] = build_synapse_guest_federation_section(
+        guest_calls_enabled
+    )
     if guest_calls_enabled:
         guest_values = resolve_guest_access_values(config)
         derived.update(guest_values)
@@ -2073,6 +2090,15 @@ def apply_configuration(
             "Share guest meeting links with: bash scripts/call-link.sh ROOM_ID "
             "(not the matrix.to room share button)."
         )
+        guest_server_name = env_vars.get("GUEST_SERVER_NAME", "").strip()
+        if guest_server_name:
+            print(
+                "Guest federation: Synapse uses extra_hosts for "
+                f"{guest_server_name} (modules/core/docker-compose.guest.yml). "
+                "After apply, verify with:\n"
+                f"  docker inspect matrix_synapse --format '{{{{json .HostConfig.ExtraHosts}}}}'\n"
+                f"  docker exec matrix_synapse getent hosts {guest_server_name}"
+            )
         if env_vars.get("GUEST_ACCESS_TUWUNEL_MAIN_WARNING"):
             print(env_vars["GUEST_ACCESS_TUWUNEL_MAIN_WARNING"])
 
