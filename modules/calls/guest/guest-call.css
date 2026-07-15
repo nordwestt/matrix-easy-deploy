@@ -19,7 +19,11 @@ body[data-platform] form > p {
     display: none !important;
 }
 
-#id div p {
+#root div p {
+    display: none !important;
+}
+
+header div {
     display: none !important;
 }
 
