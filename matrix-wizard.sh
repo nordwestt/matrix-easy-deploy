@@ -156,8 +156,39 @@ edit_deploy_config() {
             warn "LiveKit domain is required when calls are enabled."
             ask LIVEKIT_DOMAIN "LiveKit domain" "${config_livekit_domain:-$_suggested_livekit_domain}"
         done
+
+        local _base_domain
+        _base_domain="$(extract_base_domain "$MATRIX_DOMAIN")"
+        local _suggested_guest_call_domain="call.${_base_domain}"
+        local _suggested_guest_server_name="guest.${_base_domain}"
+
+        ENABLE_GUEST_ACCESS="false"
+        if [[ "$ENABLE_FEDERATION" == "true" && "$ENABLE_REGISTRATION" != "true" ]]; then
+            ask_yn ENABLE_GUEST_ACCESS_INPUT \
+                "Enable external guest call links (self-hosted Element Call)?" \
+                "${config_guest_access_default:-n}"
+            ENABLE_GUEST_ACCESS="$([ "$ENABLE_GUEST_ACCESS_INPUT" == "y" ] && echo "true" || echo "false")"
+        elif [[ "${config_guest_access_default:-n}" == "y" ]]; then
+            warn "Guest call links require federation enabled and public registration disabled on the main server."
+            ENABLE_GUEST_ACCESS="false"
+        fi
+
+        if [[ "$ENABLE_GUEST_ACCESS" == "true" ]]; then
+            ask GUEST_CALL_DOMAIN \
+                "Element Call domain  (e.g. call.example.com)" \
+                "${config_guest_call_domain:-$_suggested_guest_call_domain}"
+            ask GUEST_SERVER_NAME \
+                "Guest server domain  (e.g. guest.example.com — MXIDs and API)" \
+                "${config_guest_server_name:-$_suggested_guest_server_name}"
+        else
+            GUEST_CALL_DOMAIN=""
+            GUEST_SERVER_NAME=""
+        fi
     else
         LIVEKIT_DOMAIN=""
+        ENABLE_GUEST_ACCESS="false"
+        GUEST_CALL_DOMAIN=""
+        GUEST_SERVER_NAME=""
     fi
 
     echo
@@ -188,6 +219,13 @@ edit_deploy_config() {
     fi
     if [[ "$ENABLE_CALLS" == "true" ]]; then
         echo -e "  LiveKit (calls) : ${CYAN}${LIVEKIT_DOMAIN}${RESET}"
+        if [[ "$ENABLE_GUEST_ACCESS" == "true" ]]; then
+            echo -e "  Guest calls     : ${CYAN}enabled${RESET}"
+            echo -e "  Element Call    : ${CYAN}${GUEST_CALL_DOMAIN}${RESET}"
+            echo -e "  Guest MXIDs     : ${CYAN}@user:${GUEST_SERVER_NAME}${RESET}"
+        else
+            echo -e "  Guest calls     : ${CYAN}disabled${RESET}"
+        fi
     else
         echo -e "  LiveKit (calls) : ${CYAN}disabled${RESET}"
     fi
@@ -202,6 +240,10 @@ edit_deploy_config() {
     fi
     if [[ "$ENABLE_CALLS" == "true" ]]; then
         echo -e "    ${CYAN}${LIVEKIT_DOMAIN}${RESET}  →  <this server's IP>"
+        if [[ "$ENABLE_GUEST_ACCESS" == "true" ]]; then
+            echo -e "    ${CYAN}${GUEST_CALL_DOMAIN}${RESET}  →  <this server's IP>"
+            echo -e "    ${CYAN}${GUEST_SERVER_NAME}${RESET}  →  <this server's IP>"
+        fi
     fi
     echo
 
@@ -226,6 +268,9 @@ edit_deploy_config() {
         --element-domain "$ELEMENT_DOMAIN" \
         --calls-enabled "$ENABLE_CALLS" \
         --livekit-domain "$LIVEKIT_DOMAIN" \
+        --guest-access-enabled "$ENABLE_GUEST_ACCESS" \
+        --guest-call-domain "$GUEST_CALL_DOMAIN" \
+        --guest-server-name "$GUEST_SERVER_NAME" \
         --local-login-enabled "$LOCAL_LOGIN_ENABLED"
     if [[ "$SERVER_IMPLEMENTATION" == "synapse" ]]; then
         python3 "${SCRIPT_DIR}/scripts/config_edit.py" \

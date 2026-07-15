@@ -68,6 +68,27 @@ class RuntimeStateTests(unittest.TestCase):
             self.assertEqual(state["HOOKSHOT_ENABLED"], "false")
             self.assertEqual(state["WHATSAPP_BRIDGE_ENABLED"], "false")
             self.assertEqual(state["SLACK_BRIDGE_ENABLED"], "false")
+            self.assertEqual(state["GUEST_ACCESS_ENABLED"], "false")
+
+    def test_guest_access_enabled_from_deploy_yaml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "deploy.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "features": {
+                            "calls": {
+                                "enabled": True,
+                                "guest_access": {"enabled": True},
+                            }
+                        }
+                    },
+                    sort_keys=False,
+                )
+            )
+
+            state = runtime_state.resolve_runtime_state(root)
+            self.assertEqual(state["GUEST_ACCESS_ENABLED"], "true")
 
 
 if __name__ == "__main__":

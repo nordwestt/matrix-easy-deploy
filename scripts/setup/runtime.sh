@@ -31,10 +31,13 @@ stop_existing_services_for_first_setup_reset() {
     fi
 
     build_core_compose_stop_profiles
+    build_core_compose_args "${SCRIPT_DIR}"
+    build_caddy_compose_args "${SCRIPT_DIR}"
+    build_calls_compose_args "${SCRIPT_DIR}"
 
-    (cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans) || true
-    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" down) || true
-    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" down) || true
+    (cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" down --remove-orphans) || true
+    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" down) || true
+    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" down) || true
 }
 
 reset_core_postgres_volume_if_present() {
@@ -57,7 +60,8 @@ start_services() {
 
     echo
     info "Starting Caddy…"
-    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" up -d --pull always)
+    build_caddy_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d --pull always)
     success "Caddy is up."
 
     echo
@@ -71,8 +75,9 @@ start_services() {
     (
         cd "${SCRIPT_DIR}/modules/core"
         build_core_compose_start_profiles
+        build_core_compose_args "${SCRIPT_DIR}"
         POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-            "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" up -d --pull always
+            "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" up -d --pull always
     )
     success "Core services started."
 
@@ -90,7 +95,8 @@ start_services() {
 
     echo
     info "Starting calls services (coturn + LiveKit)…"
-    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" up -d --pull always)
+    build_calls_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" up -d --pull always)
     success "Calls services started."
 }
 

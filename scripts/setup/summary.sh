@@ -18,6 +18,10 @@ EOF
         echo -e "  ${BOLD}Element client${RESET}     https://${ELEMENT_DOMAIN}/"
     fi
     echo -e "  ${BOLD}LiveKit SFU${RESET}        https://${LIVEKIT_DOMAIN}/"
+    if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
+        echo -e "  ${BOLD}Element Call${RESET}     https://${GUEST_CALL_DOMAIN}/"
+        echo -e "  ${BOLD}Guest MXIDs${RESET}      @user:${GUEST_SERVER_NAME}"
+    fi
     echo -e "  ${BOLD}TURN server${RESET}        ${MATRIX_DOMAIN}:3478 (UDP/TCP) and :5349 (TLS)"
     echo -e "  ${BOLD}Synapse admin${RESET}      https://${MATRIX_DOMAIN}/_synapse/admin/v1/"
     echo
@@ -27,6 +31,11 @@ EOF
     echo -e "    See logs (Synapse):     ${CYAN}docker logs -f matrix_synapse${RESET}"
     echo -e "    See logs (Redis):       ${CYAN}docker logs -f matrix_redis${RESET}"
     echo -e "    See logs (LiveKit):     ${CYAN}docker logs -f matrix_livekit${RESET}"
+    if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
+        echo -e "    See logs (Guest HS):    ${CYAN}docker logs -f matrix_guest_tuwunel${RESET}"
+        echo -e "    See logs (Element Call): ${CYAN}docker logs -f matrix_element_call${RESET}"
+        echo -e "    Guest call link:        ${CYAN}bash scripts/call-link.sh '!room:server'${RESET}"
+    fi
     echo -e "    See logs (coturn):      ${CYAN}docker logs -f matrix_coturn${RESET}"
     echo -e "    See logs (Caddy):       ${CYAN}docker logs -f caddy${RESET}"
     echo -e "    Stop all services:      ${CYAN}bash stop.sh${RESET}"

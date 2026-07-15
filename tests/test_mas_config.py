@@ -159,6 +159,7 @@ class MasConfigCaddyTests(unittest.TestCase):
             element_domain="example.com",
         )
         self.assertIn("reverse_proxy matrix_element:80", routing["CADDY_ELEMENT_MATRIX_FALLBACK"])
+        self.assertIn("handle /config.json", routing["CADDY_ELEMENT_MATRIX_FALLBACK"])
         self.assertEqual(routing["CADDY_ELEMENT_SITE_BLOCK"], "")
 
     def test_build_caddy_element_routing_separate_host(self):
@@ -170,4 +171,5 @@ class MasConfigCaddyTests(unittest.TestCase):
         )
         self.assertEqual(routing["CADDY_ELEMENT_MATRIX_FALLBACK"], "")
         self.assertIn("element.example.com {", routing["CADDY_ELEMENT_SITE_BLOCK"])
+        self.assertIn("handle /config.json", routing["CADDY_ELEMENT_SITE_BLOCK"])
         self.assertNotIn("matrix_mas", routing["CADDY_ELEMENT_SITE_BLOCK"])

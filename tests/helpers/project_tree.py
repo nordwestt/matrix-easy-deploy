@@ -129,6 +129,38 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "        reverse_proxy host.docker.internal:7880\n"
             "    }\n"
             "}\n"
+            "{{CADDY_GUEST_MATRIX_BLOCK}}"
+            "{{CADDY_ELEMENT_CALL_SITE_BLOCK}}"
+            "{{CADDY_ELEMENT_SITE_BLOCK}}\n"
+        )
+        (root / "modules/calls/guest").mkdir(parents=True, exist_ok=True)
+        (root / "modules/calls/guest/tuwunel.toml.template").write_text(
+            'server_name = "{{GUEST_SERVER_NAME}}"\n'
+            "allow_registration = true\n"
+            "yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true\n"
+            "allow_room_creation = false\n"
+            'allowed_remote_server_names_experimental = [\'^{{GUEST_FEDERATION_ALLOW_REGEX}}$\']\n'
+            "[global.well_known]\n"
+            'client = "https://{{GUEST_SERVER_NAME}}"\n'
+            'server = "{{GUEST_SERVER_NAME}}:443"\n'
+            'livekit_url = "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"\n'
+        )
+        (root / "modules/calls/guest/nginx.conf.template").write_text(
+            "server {\n"
+            "    listen 8080;\n"
+            "    sub_filter '</head>' '<link rel=\"stylesheet\" href=\"/guest-call.css\"></head>';\n"
+            "}\n"
+        )
+        (root / "modules/calls/guest/guest-call.css").write_text(
+            "/* guest-call test stub */\n"
+        )
+        (root / "caddy/docker-compose.guest.template").write_text(
+            "services:\n  caddy:\n    networks:\n      caddy_net:\n        aliases:\n"
+            "{{GUEST_CADDY_NETWORK_ALIASES}}\n"
+        )
+        (root / "modules/core/docker-compose.guest.template").write_text(
+            "services:\n  synapse:\n    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n"
+            "  tuwunel:\n    dns:\n      - 1.1.1.1\n      - 8.8.8.8\n"
         )
         (root / "modules/core/synapse/homeserver.yaml.template").write_text(
             "server_name: {{SERVER_NAME}}\n"
@@ -152,6 +184,8 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "  transports:\n"
             "    - type: livekit\n"
             "      livekit_service_url: \"https://{{LIVEKIT_DOMAIN}}/livekit/jwt\"\n"
+            "allow_public_rooms_over_federation: {{ALLOW_PUBLIC_ROOMS_FEDERATION}}\n"
+            "{{SYNAPSE_GUEST_FEDERATION_SECTION}}\n"
             "max_event_delay_duration: 24h\n"
             "rc_message:\n"
             "  per_second: 0.5\n"

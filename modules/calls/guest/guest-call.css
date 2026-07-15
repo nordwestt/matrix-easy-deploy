@@ -1,0 +1,43 @@
+/*
+ * Guest-call UX overrides for Element Call v0.21.
+ *
+ * Config.json handles: homeserver, LiveKit, matrix_rtc_*, media_devices,
+ * ssla (cleared), and analytics (omitted = disabled).
+ *
+ * CSS is still required for UI Element Call does not expose in config:
+ * - SSLA caption (always rendered even when ssla is empty)
+ * - "Create an account" footer on the join screen
+ * - Post-call password / feedback upsell for passwordless users
+ */
+
+/* Pre-join: SSLA line and "Create an account" footer */
+body[data-platform] .container > .footer {
+    display: none !important;
+}
+
+body[data-platform] form > p {
+    display: none !important;
+}
+
+#root div p {
+    display: none !important;
+}
+
+header div {
+    display: none !important;
+}
+
+body[data-platform] .container .main form *:has(> a[href]) {
+    display: none !important;
+}
+
+/* Post-call: feedback survey and "set up a password" upsell */
+body[data-platform] .callEndedContent {
+    display: none !important;
+}
+
+/* Register/login prompts elsewhere in the SPA */
+body[data-platform] a[href="/register"],
+body[data-platform] a[href="/login"] {
+    display: none !important;
+}

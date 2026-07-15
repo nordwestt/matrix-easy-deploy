@@ -12,7 +12,8 @@ ensure_docker_volume "caddy_data"
 ensure_homeserver_data_permissions "${SCRIPT_DIR}"
 
 info "Starting Caddy…"
-(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" up -d)
+build_caddy_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d)
 
 info "Starting core services…"
 # Load .env if it exists so POSTGRES_PASSWORD and INSTALL_ELEMENT are available
@@ -28,7 +29,8 @@ fi
 load_runtime_desired_state "${SCRIPT_DIR}"
 
 build_core_compose_start_profiles
-(cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_PROFILES[@]}" up -d)
+build_core_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/modules/core" && "${DOCKER_COMPOSE[@]}" "${CORE_COMPOSE_ARGS[@]}" "${CORE_COMPOSE_PROFILES[@]}" up -d)
 
 if [[ "${MAS_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/mas/config.yaml" ]]; then
     bootstrap_mas_database "${SCRIPT_DIR}"
@@ -39,7 +41,8 @@ elif [[ "${MAS_ENABLED:-false}" == "true" ]]; then
 fi
 
 info "Starting calls services (coturn + LiveKit)…"
-(cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" up -d)
+build_calls_compose_args "${SCRIPT_DIR}"
+(cd "${SCRIPT_DIR}/modules/calls" && "${DOCKER_COMPOSE[@]}" "${CALLS_COMPOSE_ARGS[@]}" up -d)
 
 # Start Hookshot if it was installed as a module
 if [[ "${HOOKSHOT_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/hookshot/hookshot/config.yml" ]]; then

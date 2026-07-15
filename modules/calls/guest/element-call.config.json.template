@@ -1,0 +1,33 @@
+{
+    "default_server_config": {
+        "m.homeserver": {
+            "base_url": "https://{{GUEST_SERVER_NAME}}",
+            "server_name": "{{GUEST_SERVER_NAME}}"
+        },
+        "org.matrix.msc4143.rtc_foci": [
+            {
+                "type": "livekit",
+                "livekit_service_url": "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
+            }
+        ]
+    },
+    "livekit": {
+        "livekit_service_url": "https://{{LIVEKIT_DOMAIN}}/livekit/jwt"
+    },
+    "features": {
+        "feature_use_device_session_member_events": true
+    },
+    "ssla": "",
+    "matrix_rtc_mode": "compatibility",
+    "matrix_rtc_session": {
+        "wait_for_key_rotation_ms": 3000,
+        "membership_event_expiry_ms": 180000000,
+        "delayed_leave_event_delay_ms": 18000,
+        "delayed_leave_event_restart_ms": 4000,
+        "network_error_retry_ms": 100
+    },
+    "media_devices": {
+        "enable_audio": true,
+        "enable_video": false
+    }
+}

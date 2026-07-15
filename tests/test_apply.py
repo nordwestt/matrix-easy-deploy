@@ -673,6 +673,195 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(merged["element_call"]["url"], "https://call.element.io")
         self.assertTrue(merged["features"]["feature_group_calls"])
 
+    def test_build_guest_call_share_url_matches_element_web_format(self):
+        url = apply.build_guest_call_share_url(
+            "call.example.com",
+            "!AdAczRpx:example.com",
+            "example.com",
+        )
+        self.assertEqual(
+            url,
+            "https://call.example.com/room/#/!AdAczRpx:example.com?"
+            "roomId=%21AdAczRpx%3Aexample.com&intent=join_existing&viaServers=example.com"
+            "&confineToRoom=true&header=none",
+        )
+
+    def test_guest_tuwunel_federation_regex_uses_toml_literal_quotes(self):
+        cfg = self.sample_config()
+        cfg["matrix"]["server_name"] = "matrix.nordwestt.com"
+        cfg["features"]["calls"]["guest_access"] = {
+            "enabled": True,
+            "domain": "call.nordwestt.com",
+            "server_name": "matrix-guest.nordwestt.com",
+        }
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
+        self.assertIn(
+            "allowed_remote_server_names_experimental = "
+            "['^(?:matrix\\.nordwestt\\.com|matrix\\-guest\\.nordwestt\\.com)$']",
+            guest_tuwunel,
+        )
+
+    def test_apply_configuration_guest_access_dedupes_caddy_aliases_when_domains_match(self):
+        cfg = self.sample_config()
+        cfg["matrix"]["domain"] = "matrix.nordwestt.com"
+        cfg["matrix"]["server_name"] = "matrix.nordwestt.com"
+        cfg["features"]["calls"]["guest_access"] = {
+            "enabled": True,
+            "domain": "call.nordwestt.com",
+            "server_name": "matrix-guest.nordwestt.com",
+        }
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        caddy_guest_compose = (self.root / "caddy/docker-compose.guest.yml").read_text()
+        self.assertEqual(
+            caddy_guest_compose.count('"matrix.nordwestt.com"'),
+            1,
+        )
+        self.assertIn('"matrix-guest.nordwestt.com"', caddy_guest_compose)
+
+    def test_apply_configuration_guest_access_renders_guest_stack(self):
+        cfg = self.sample_config()
+        cfg["features"]["calls"]["guest_access"] = {
+            "enabled": True,
+            "domain": "call.example.com",
+            "server_name": "guest.example.com",
+        }
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        env_text = (self.root / ".env").read_text()
+        self.assertIn("GUEST_ACCESS_ENABLED=true", env_text)
+        self.assertIn("GUEST_CALL_DOMAIN=call.example.com", env_text)
+        self.assertIn("LIVEKIT_FULL_ACCESS_HOMESERVERS=example.com,guest.example.com", env_text)
+        self.assertIn(
+            "LIVEKIT_CS_API_URL_OVERRIDES=example.com=https://matrix.example.com,"
+            "guest.example.com=https://guest.example.com",
+            env_text,
+        )
+
+        caddy = (self.root / "caddy/Caddyfile").read_text()
+        self.assertIn("guest.example.com {", caddy)
+        self.assertIn("Access-Control-Allow-Origin *", caddy)
+        self.assertIn("handle /_matrix/client/v1/room_summary/*", caddy)
+        self.assertIn("handle /_matrix/client/unstable/im.nheko.summary/*", caddy)
+        self.assertIn("header_up -Authorization", caddy)
+        self.assertIn("reverse_proxy matrix_guest_tuwunel:8008", caddy)
+        self.assertNotIn("Access-Control-Request-Headers", caddy)
+        self.assertIn("call.example.com {", caddy)
+        self.assertIn("@guest_home path / /login /register", caddy)
+        self.assertIn("/srv/guest-call-landing", caddy)
+        self.assertIn("reverse_proxy matrix_element_call:8080", caddy)
+
+        guest_tuwunel = (self.root / "modules/calls/guest/tuwunel.toml").read_text()
+        self.assertIn('server_name = "guest.example.com"', guest_tuwunel)
+        self.assertIn("yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true", guest_tuwunel)
+        self.assertIn("allow_room_creation = false", guest_tuwunel)
+        self.assertIn(
+            "allowed_remote_server_names_experimental = "
+            "['^(?:example\\.com|guest\\.example\\.com)$']",
+            guest_tuwunel,
+        )
+        self.assertIn("[global.well_known]", guest_tuwunel)
+        self.assertIn('server = "guest.example.com:443"', guest_tuwunel)
+        self.assertIn("livekit_url = \"https://livekit.example.com/livekit/jwt\"", guest_tuwunel)
+
+        element_call_cfg = json.loads(
+            (self.root / "modules/calls/guest/element-call.config.json").read_text()
+        )
+        self.assertEqual(
+            element_call_cfg["default_server_config"]["m.homeserver"]["base_url"],
+            "https://guest.example.com",
+        )
+        self.assertEqual(
+            element_call_cfg["livekit"]["livekit_service_url"],
+            "https://livekit.example.com/livekit/jwt",
+        )
+        self.assertEqual(element_call_cfg.get("ssla"), "")
+        self.assertEqual(element_call_cfg.get("matrix_rtc_mode"), "compatibility")
+        self.assertEqual(
+            element_call_cfg.get("media_devices"),
+            {"enable_audio": True, "enable_video": False},
+        )
+        self.assertNotIn("posthog", element_call_cfg)
+
+        guest_nginx = (self.root / "modules/calls/guest/nginx.conf").read_text()
+        self.assertIn("sub_filter", guest_nginx)
+        self.assertTrue((self.root / "modules/calls/guest/nginx.conf").is_file())
+
+        element = json.loads((self.root / "modules/core/element/config.json").read_text())
+        self.assertEqual(element["element_call"]["url"], "https://call.example.com")
+        self.assertEqual(element["element_call"]["guest_spa_url"], "https://call.example.com")
+        self.assertTrue(element["features"]["feature_ask_to_join"])
+
+        caddy_guest_compose = (self.root / "caddy/docker-compose.guest.yml").read_text()
+        self.assertIn("guest.example.com", caddy_guest_compose)
+        self.assertIn("example.com", caddy_guest_compose)
+        self.assertIn("matrix.example.com", caddy_guest_compose)
+
+        core_guest_compose = (self.root / "modules/core/docker-compose.guest.yml").read_text()
+        self.assertIn("synapse:", core_guest_compose)
+        self.assertIn("1.1.1.1", core_guest_compose)
+        self.assertNotIn("extra_hosts", core_guest_compose)
+
+        synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
+        self.assertIn('ip_range_whitelist:\n  - "172.16.0.0/12"', synapse)
+
+    def test_apply_configuration_guest_access_disabled_omits_guest_blocks(self):
+        cfg = self.sample_config()
+        cfg["features"]["calls"]["guest_access"] = {"enabled": False}
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+        caddy = (self.root / "caddy/Caddyfile").read_text()
+        self.assertNotIn("matrix_guest_tuwunel", caddy)
+        self.assertNotIn("matrix_element_call", caddy)
+        self.assertFalse((self.root / "modules/calls/docker-compose.guest.yml").exists())
+        self.assertFalse((self.root / "modules/core/docker-compose.guest.yml").exists())
+        self.assertFalse((self.root / "caddy/docker-compose.guest.yml").exists())
+
+        env_text = (self.root / ".env").read_text()
+        self.assertIn("GUEST_ACCESS_ENABLED=false", env_text)
+        self.assertIn("LIVEKIT_FULL_ACCESS_HOMESERVERS=example.com", env_text)
+
+        element = json.loads((self.root / "modules/core/element/config.json").read_text())
+        self.assertEqual(element["element_call"]["url"], "https://call.element.io")
+        self.assertNotIn("guest_spa_url", element["element_call"])
+
+        synapse = (self.root / "modules/core/synapse/homeserver.yaml").read_text()
+        self.assertNotIn("ip_range_whitelist", synapse)
+
+    def test_validate_guest_access_requires_federation(self):
+        cfg = self.sample_config()
+        cfg["features"]["federation_enabled"] = False
+        cfg["features"]["calls"]["guest_access"] = {"enabled": True}
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        with self.assertRaisesRegex(ValueError, "federation_enabled=true"):
+            apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
+    def test_validate_guest_access_rejects_open_main_registration(self):
+        cfg = self.sample_config()
+        cfg["features"]["registration_enabled"] = True
+        cfg["features"]["calls"]["guest_access"] = {"enabled": True}
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        with self.assertRaisesRegex(ValueError, "registration_enabled=true"):
+            apply.apply_configuration(ctx, server_ip="9.8.7.6")
+
     def test_apply_configuration_renders_custom_integrations_override(self):
         cfg = self.sample_config()
         cfg["features"]["element"]["integrations"] = {

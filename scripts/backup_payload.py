@@ -25,6 +25,7 @@ BASE_PERSISTENT_PATHS = [
 ]
 
 TUWUNEL_DATA_PATH = "modules/core/tuwunel_data"
+GUEST_TUWUNEL_DATA_PATH = "modules/calls/guest/tuwunel_data"
 
 CADDY_VOLUMES = ["caddy_data", "caddy_caddy_config"]
 
@@ -60,11 +61,27 @@ def resolve_server_implementation(deploy: dict) -> str:
     return impl if impl in {"synapse", "tuwunel"} else "synapse"
 
 
+def _guest_access_enabled(deploy: dict) -> bool:
+    features = deploy.get("features")
+    if not isinstance(features, dict):
+        return False
+    calls = features.get("calls")
+    if not isinstance(calls, dict) or not calls.get("enabled", True):
+        return False
+    guest = calls.get("guest_access")
+    if not isinstance(guest, dict):
+        return False
+    return guest.get("enabled") is True
+
+
 def resolve_persistent_paths(deploy: dict) -> list[str]:
     paths = list(BASE_PERSISTENT_PATHS)
     if resolve_server_implementation(deploy) == "tuwunel":
         if TUWUNEL_DATA_PATH not in paths:
             paths.append(TUWUNEL_DATA_PATH)
+    if _guest_access_enabled(deploy):
+        if GUEST_TUWUNEL_DATA_PATH not in paths:
+            paths.append(GUEST_TUWUNEL_DATA_PATH)
     return paths
 
 

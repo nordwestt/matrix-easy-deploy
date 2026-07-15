@@ -234,6 +234,15 @@ class SetupRuntimeTests(unittest.TestCase):
                 build_core_compose_start_profiles() {
                     CORE_COMPOSE_PROFILES=(--profile synapse --profile element)
                 }
+                build_core_compose_args() {
+                    CORE_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
+                build_caddy_compose_args() {
+                    CADDY_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
+                build_calls_compose_args() {
+                    CALLS_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
 
                 start_services
                 """
@@ -307,6 +316,15 @@ class SetupRuntimeTests(unittest.TestCase):
                 }
                 build_core_compose_start_profiles() {
                     CORE_COMPOSE_PROFILES=(--profile synapse)
+                }
+                build_core_compose_args() {
+                    CORE_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
+                build_caddy_compose_args() {
+                    CADDY_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
+                build_calls_compose_args() {
+                    CALLS_COMPOSE_ARGS=(-f docker-compose.yml)
                 }
 
                 start_services
@@ -400,6 +418,15 @@ class SetupRuntimeTests(unittest.TestCase):
                 }
                 build_core_compose_start_profiles() {
                     CORE_COMPOSE_PROFILES=(--profile synapse)
+                }
+                build_core_compose_args() {
+                    CORE_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
+                build_caddy_compose_args() {
+                    CADDY_COMPOSE_ARGS=(-f docker-compose.yml)
+                }
+                build_calls_compose_args() {
+                    CALLS_COMPOSE_ARGS=(-f docker-compose.yml)
                 }
 
                 start_services

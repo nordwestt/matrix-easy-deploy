@@ -1,6 +1,6 @@
 # 💊 MED-kit: The cure to your matrix deployment headaches
 
-An easy way to deploy your own [Matrix](https://matrix.org) homeserver with reasonable defaults.
+An easy way to deploy your own [Matrix](https://matrix.org) server with reasonable defaults.
 
 One script. A few questions. Your own communication infrastructure with the ability to federate. 
 
@@ -51,18 +51,27 @@ flowchart TD
 
 ```
 
-After running `matrix-wizard.sh` you'll have a working Matrix homeserver — the whole stack, containerised and wired together:
+After running `matrix-wizard.sh` you'll have a working Matrix server — the whole stack, containerised and wired together:
 
 
 | Service | What it does |
 |---------|-------------|
-| <img src="https://matrix.org/images/matrix-logo-white.svg" alt="Synapse" width="28"/> **[Synapse](https://github.com/element-hq/synapse)** | The Matrix homeserver. Handles federation, rooms, messages. |
+| <img src="https://matrix.org/images/matrix-logo-white.svg" alt="Synapse" width="28"/> **[Synapse](https://github.com/element-hq/synapse)** | The Matrix server. Handles federation, rooms, messages. |
 | <img src="https://element.io/assets-32bb636196f91ed59d7a49190e26b42c/5ef25c0d30ee3108da4c25e9/5f365d3197194f8c73b00112_logo-mark-primary.svg" alt="Element Web" width="28"/> **[Element Web](https://github.com/element-web/element-web)** | The web client. Served at your domain so anyone can log in from a browser. |
 | <img src="https://caddyserver.com/resources/images/logo-dark.svg" alt="Caddy" width="28"/> **[Caddy](https://caddyserver.com)** | Reverse proxy. Handles TLS automatically via Let's Encrypt. |
 | <img src="https://www.postgresql.org/media/img/about/press/elephant.png" alt="PostgreSQL" width="28"/> **PostgreSQL** | Database for Synapse. Considerably more robust than SQLite for anything beyond a toy. |
 | <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Redis_logo.svg/250px-Redis_logo.svg.png" alt="Redis" width="28"/> **Redis** | Shared cache/event store for modules (Hookshot E2EE now, others later). |
 | **[coturn](https://github.com/coturn/coturn)** | TURN server. Relays WebRTC traffic for 1:1 voice and video calls when both sides are behind NAT. |
 | <img src="https://livekit.io/favicon.ico" alt="LiveKit" width="28"/> **[LiveKit](https://livekit.io)** | SFU (Selective Forwarding Unit). Powers group video calls via Element Call and MatrixRTC. |
+
+✅ Your users authenticate against your identity system (MAS)
+✅ Your rooms and events live in your Synapse
+✅ Your calls are brokered through your MatrixRTC backend
+✅ Your media flows through your LiveKit
+✅ Your TURN relay is your coturn
+✅ Your call UI is your Element Call deployment
+
+So if Microsoft Teams, Google Meet, Slack disappeared tomorrow, your deployment would continue operating.
 
 Everything runs in Docker Compose. Caddy manages your TLS certificate without you lifting a finger.
 
@@ -436,7 +445,7 @@ The wizard will ask you:
 
 ### Configuration model
 
-- `matrix.server_implementation` selects the homeserver software: `synapse` (default) or [`tuwunel`](https://github.com/matrix-construct/tuwunel) (Rust, lower resource use). Set this in `deploy.yaml` before the first `bash apply.sh`, or choose it in the setup wizard. **Switching implementation on an existing deployment is not supported** (no Synapse→Tuwunel migration yet).
+- `matrix.server_implementation` selects the server software: `synapse` (default) or [`tuwunel`](https://github.com/matrix-construct/tuwunel) (Rust, lower resource use). Set this in `deploy.yaml` before the first `bash apply.sh`, or choose it in the setup wizard. **Switching implementation on an existing deployment is not supported** (no Synapse→Tuwunel migration yet).
 - `deploy.yaml` is the operator-owned source of truth.
 - `bash apply.sh` reads `deploy.yaml` and writes generated runtime artifacts (`.env`, rendered service configs, module state metadata).
 - Re-running `bash apply.sh` is idempotent by default: existing generated secrets are re-used.
@@ -458,13 +467,13 @@ bash apply.sh --rotate-secrets
 
 ### Auto-join rooms (Synapse and Tuwunel)
 
-`features.auto_join` defines which rooms new users are joined to on registration. The same configuration works for both Synapse and Tuwunel. `bash apply.sh` writes the alias list into the generated homeserver config and **automatically provisions** the rooms (name, topic, welcome message, handover) via med-admin — no separate setup step required.
+`features.auto_join` defines which rooms new users are joined to on registration. The same configuration works for both Synapse and Tuwunel. `bash apply.sh` writes the alias list into the generated server config and **automatically provisions** the rooms (name, topic, welcome message, handover) via med-admin — no separate setup step required.
 
 - `rooms`: list of room aliases. Each entry may be a plain alias string (for example `#welcome:example.com`) or an object with:
   - `alias` (required for objects): local alias name or full alias
   - `name`, `topic`, `message`: room display name, topic, and a one-time welcome message
   - `handover`: list of local usernames or MXIDs to invite and grant room admin (power level 100) so they can manage the room going forward
-  - `federated`: when `false` (default), the room is **public on your server** but not open to remote Matrix homeservers; set `true` only if you intentionally want the room federated
+  - `federated`: when `false` (default), the room is **public on your server** but not open to remote Matrix servers; set `true` only if you intentionally want the room federated
 - `synapse.rooms_for_guests`: Synapse-only — auto-join guest accounts too (default `true` when set)
 
 Rooms are created as **locally public** spaces: any user on your server can join, but they are **not** world-wide public unless you set `federated: true`.
@@ -488,7 +497,7 @@ features:
       rooms_for_guests: false
 ```
 
-When `rooms` is non-empty, `bash apply.sh` restarts services (by default), waits for the homeserver to respond, then provisions the rooms automatically via med-admin. Use `bash apply.sh --skip-auto-join-provision` to render config without provisioning (for example in CI).
+When `rooms` is non-empty, `bash apply.sh` restarts services (by default), waits for the server to respond, then provisions the rooms automatically via med-admin. Use `bash apply.sh --skip-auto-join-provision` to render config without provisioning (for example in CI).
 
 To re-provision manually or post the welcome message again, use:
 
@@ -580,12 +589,106 @@ Notes:
 - To disable Scalar integrations entirely, set `features.element.integrations.enabled: false`.
 - For less common Element settings, use `features.element.extra_config` to merge raw config into the generated JSON.
 
+### Element Call guest access (optional)
+
+Enable shareable meeting links for people without Matrix accounts (like Google Meet). This deploys a lightweight guest Tuwunel server and a self-hosted [Element Call](https://github.com/element-hq/element-call) SPA, reusing your existing LiveKit stack.
+
+Requirements:
+- `features.calls.enabled: true`
+- `features.federation_enabled: true` (guests join main-server rooms via federation)
+- `features.registration_enabled: false` on the main server (guest registration happens on the isolated guest server only)
+
+Example:
+
+```yaml
+features:
+  calls:
+    enabled: true
+    livekit_domain: livekit.example.com
+    guest_access:
+      enabled: true
+      domain: call.example.com              # default: call.{base_domain}
+      server_name: guest.example.com        # default: guest.{base_domain}; MXIDs and client API
+```
+
+When enabled, Element Web uses your self-hosted Element Call URL for both registered users and guests (`element_call.url` and `guest_spa_url`). Guest accounts get MXIDs like `@alice:guest.example.com`.
+
+**How it works (Google Meet style):**
+
+- Employees on your main server create calls/rooms in Element Web and share the guest link with externals.
+- Externals open the shared link (for example `https://call.example.com/room/#/!room:example.com?roomId=...&intent=join_existing&viaServers=example.com`) — a guest account is created automatically in the background.
+- Visiting `https://call.example.com/` alone shows a simple “join your meeting” page — no login or register buttons.
+- The guest homeserver allows registration but **blocks room creation**; only your main server can create rooms/calls.
+
+**Important — two different “share” actions in Element Web:**
+
+| Action | Link shape | For guests? |
+|--------|------------|-------------|
+| Room header **Share** (matrix icon) | `https://matrix.to/#/!room:server` | No — sends people to Matrix client login |
+| **Invite to call** / guest link (link icon while a call is active) | `https://call.example.com/room/#/...` | Yes — opens your Element Call SPA |
+
+The guest call link button appears in Element Web when `guest_spa_url` is configured (done automatically by `apply.sh`) and the room allows guest access (public join, or “Ask to join” with `feature_ask_to_join`). It only shows while a call is active in that room.
+
+Generate a guest link from the shell (e.g. after copying the room ID from Element):
+
+```bash
+bash scripts/call-link.sh '!AdAczRpx:example.com'
+```
+
+**Room access for guest calls:** Element Call checks the room summary API (MSC3266) before joining. The room must use join rule **Public** or **Ask to join** — not invite-only or restricted (common when a room lives under a Space). “Public” in Element’s room directory is not the same as join rule Public. Verify from your server:
+
+```bash
+bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
+```
+
+If `join_rule` is `invite` or `restricted`, change the room in Element → Room settings → Access → **Anyone can join** or **Ask to join**, then retry in a fresh browser tab (Element Call caches room summaries). The script checks both the main server and the guest homeserver — Element Call uses the guest path. `guest_can_join: false` on the main server is normal for this setup (it refers to legacy anonymous Synapse guests, not registered `@user:guest-server` accounts).
+
+Verify Element Web picked up the config (hard-refresh the client after `apply.sh`):
+
+```bash
+curl -s "https://element.example.com/config.json" | jq '.element_call'
+# Expect: "url" and "guest_spa_url" both pointing at https://call.example.com
+```
+
+After changing guest-call settings, restart Caddy so the landing page and branding CSS are picked up:
+
+```bash
+cd caddy && docker compose -f docker-compose.yml -f docker-compose.guest.yml up -d --force-recreate caddy
+```
+
+The guest Element Call container loads `modules/calls/guest/guest-call.css` to hide UI that Element Call does not expose in config (SSLA caption, account upsell). Guests only enter a display name and join — accounts remain throwaway.
+
+**Element Call `config.json`** (generated at `modules/calls/guest/element-call.config.json`) is separate from [Element Web config](https://web-docs.element.dev/config.html). We set homeserver + LiveKit, `matrix_rtc_mode: compatibility`, device defaults (mic on, camera off), clear `ssla`, and omit analytics keys (`posthog`, `sentry`, `rageshake`) so telemetry stays off. Guest meeting links also pass `confineToRoom=true` and `header=none` (Element Call URL flags).
+
+After changing branding or config, recreate the Element Call container:
+
+```bash
+bash apply.sh
+cd modules/calls && docker compose --profile guest-calls up -d --force-recreate element-call
+```
+
+If Element Call fails to start with a mount error on `nginx.conf`, Docker may have created that path as a directory on an earlier run. Remove it and re-run apply:
+
+```bash
+rm -rf modules/calls/guest/nginx.conf
+bash apply.sh
+```
+
+DNS records (all pointing at your VPS):
+
+| Host | Purpose |
+|------|---------|
+| `call.example.com` | Element Call SPA (meeting links) |
+| `guest.example.com` | Guest Tuwunel (MXIDs and client API) |
+
+Note: if your main server is Tuwunel, call reliability may be reduced because Tuwunel lacks MSC4140 delayed events on the principal server. Synapse main + guest Tuwunel is the recommended combination.
+
 ### Important: `MATRIX_DOMAIN` vs `SERVER_NAME`
 
-- `MATRIX_DOMAIN` is where the homeserver API is hosted (for example `matrix.example.com`).
+- `MATRIX_DOMAIN` is where the server API is hosted (for example `matrix.example.com`).
 - `SERVER_NAME` is the Matrix identity domain in MXIDs (for example `@alice:example.com`).
 
-If these are different, federation discovery still starts from `SERVER_NAME`, so DNS for **both** names must point to this host (or `SERVER_NAME` must otherwise serve `/.well-known/matrix/*` that delegates to your homeserver).
+If these are different, federation discovery still starts from `SERVER_NAME`, so DNS for **both** names must point to this host (or `SERVER_NAME` must otherwise serve `/.well-known/matrix/*` that delegates to your server).
 
 This project now generates Caddy config that serves Matrix endpoints on both hostnames automatically.
 
@@ -688,7 +791,7 @@ Advantages:
 - Gives tighter onboarding control (who gets access and when).
 - Lets you combine IdP checks + explicit local account approval for defense in depth.
 
-Use the helper to create approved accounts (on Synapse with MAS, this registers users in MAS and provisions the homeserver user):
+Use the helper to create approved accounts (on Synapse with MAS, this registers users in MAS and provisions the server user):
 
 ```bash
 bash scripts/create-account.sh
@@ -730,8 +833,8 @@ matrix-easy-deploy/
 │   ├── core/                     # The core Matrix stack
 │   │   ├── docker-compose.yml    # Synapse + Element + PostgreSQL + shared Redis
 │   │   ├── synapse/
-│   │   │   ├── homeserver.yaml.template
-│   │   │   ├── homeserver.yaml   # Generated during setup
+│   │   │   ├── server.yaml.template
+│   │   │   ├── server.yaml   # Generated during setup
 │   │   │   └── log.config
 │   │   └── element/
 │   │       ├── config.json.template
@@ -1139,6 +1242,31 @@ docker logs matrix_livekit
 curl -I https://livekit.example.com
 ```
 Also make sure port range 50000–50100/UDP is open in your firewall.
+
+**External guests cannot join Element Call links**
+
+When `features.calls.guest_access.enabled` is true, verify the guest stack is running:
+```bash
+docker logs matrix_guest_tuwunel
+docker logs matrix_element_call
+curl -I https://call.example.com
+curl -I https://guest.example.com/_matrix/client/versions
+```
+Guest access requires federation on the main server and DNS for the Element Call domain and guest server domain. The guest Tuwunel server federates only with your main server.
+
+If guests register but Element Call says the room is “not joinable” / private, federation is usually fine — the room join rule is wrong for guests. Check:
+
+```bash
+bash scripts/guest-call-room-check.sh '!yourroom:matrix.example.com'
+```
+
+`join_rule` must be `public` or `knock` on the **guest homeserver** summary (what Element Call fetches), not only on the main server. Invite-only or restricted rooms fail before join. If the main server says `public` but the guest probe shows `join_rule (missing)`, guest Tuwunel’s federated summary is incomplete — Element Call then shows “not joinable”. `apply.sh` routes room-summary requests on the guest domain to the main homeserver to avoid this. After `bash apply.sh`, recreate Caddy:
+
+```bash
+cd caddy && docker compose -f docker-compose.yml -f docker-compose.guest.yml up -d --force-recreate caddy
+```
+
+Re-run `guest-call-room-check.sh`; the guest probe should then show `join_rule: public`. Earlier successful attempts may have occurred when the summary request failed and Element Call fell back to a direct join.
 
 **1:1 calls fail or audio/video cuts out**
 
