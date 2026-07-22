@@ -34,6 +34,9 @@ BRIDGE_DB_USERS = {
     "mautrix_slack": "mautrix_slack",
 }
 
+MAS_DB_NAME = "mas"
+MAS_DB_USER = "mas"
+
 
 def _load_yaml(path: Path) -> dict:
     if not path.exists():
@@ -59,6 +62,11 @@ def resolve_server_implementation(deploy: dict) -> str:
         return "synapse"
     impl = str(matrix.get("server_implementation", "synapse")).strip().lower() or "synapse"
     return impl if impl in {"synapse", "tuwunel"} else "synapse"
+
+
+def mas_enabled(deploy: dict) -> bool:
+    """MAS is always used for Synapse deployments."""
+    return resolve_server_implementation(deploy) == "synapse"
 
 
 def _guest_access_enabled(deploy: dict) -> bool:
@@ -97,6 +105,14 @@ def resolve_database_dumps(deploy: dict) -> list[dict]:
                 "db_name": "synapse",
                 "db_user": "synapse",
                 "exclude_table_data": ["e2e_one_time_keys_json"],
+            }
+        )
+        dumps.append(
+            {
+                "name": MAS_DB_NAME,
+                "path": f"database/{MAS_DB_NAME}.dump",
+                "db_name": MAS_DB_NAME,
+                "db_user": MAS_DB_USER,
             }
         )
 

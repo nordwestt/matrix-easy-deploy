@@ -127,8 +127,13 @@ class BackupRestoreScriptTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             lines = events.read_text().splitlines()
-            self.assertTrue(any(line.startswith("docker:exec ") and "pg_dump" in line for line in lines))
-            self.assertIn("borgmatic:--config", lines[1])
+            pg_dump_lines = [line for line in lines if line.startswith("docker:exec ") and "pg_dump" in line]
+            self.assertEqual(len(pg_dump_lines), 2)
+            self.assertTrue(any("pg_dump -U synapse -d synapse" in line for line in pg_dump_lines))
+            self.assertTrue(any("pg_dump -U mas -d mas" in line for line in pg_dump_lines))
+            borgmatic_lines = [line for line in lines if line.startswith("borgmatic:")]
+            self.assertTrue(any("--config" in line for line in borgmatic_lines))
+            self.assertGreater(lines.index(borgmatic_lines[0]), lines.index(pg_dump_lines[-1]))
             self.assertTrue(any(" repo-create " in line for line in lines))
             self.assertTrue(any(" create " in line for line in lines))
             self.assertTrue(any(" prune" in line for line in lines))
@@ -438,6 +443,80 @@ class BackupRestoreScriptTests(unittest.TestCase):
             self.assertIn("archive_name_format: 'MED_Backup_{now:%Y-%m-%dT%H:%M:%S}'", borgmatic_config)
             self.assertIn("keep_daily: 7", borgmatic_config)
             self.assertNotIn("retention:", borgmatic_config)
+
+    def test_restore_includes_mas_database_dump(self):
+        import tarfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._create_min_repo(root)
+
+            archive_path = root / "portable.tar.gz"
+            payload_root = root / "payload-build"
+            payload_root.mkdir()
+            (payload_root / "deploy.yaml").write_text((root / "deploy.yaml").read_text())
+            (payload_root / ".matrix-easy-deploy").mkdir()
+            (payload_root / ".matrix-easy-deploy/secrets.yaml").write_text(
+                "POSTGRES_PASSWORD: restored\nMAS_DB_PASSWORD: mas-secret\n"
+            )
+            (payload_root / ".matrix-easy-deploy/modules.yaml").write_text("{}\n")
+            (payload_root / "database").mkdir()
+            (payload_root / "database/synapse.dump").write_text("synapse-dump\n")
+            (payload_root / "database/mas.dump").write_text("mas-dump\n")
+            (payload_root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "format": 2,
+                        "database_dumps": [
+                            {"name": "synapse", "path": "database/synapse.dump", "db_user": "synapse"},
+                            {"name": "mas", "path": "database/mas.dump", "db_user": "mas"},
+                        ],
+                    }
+                )
+                + "\n"
+            )
+
+            with tarfile.open(archive_path, "w:gz") as tar:
+                tar.add(payload_root, arcname="payload")
+
+            events = root / "events.log"
+            self._write_executable(root / "stop.sh", "#!/usr/bin/env bash\necho stop >> \"$EVENTS\"\n")
+            self._write_executable(root / "start.sh", "#!/usr/bin/env bash\necho start >> \"$EVENTS\"\n")
+            self._write_executable(root / "apply.sh", "#!/usr/bin/env bash\necho apply >> \"$EVENTS\"\n")
+
+            fake_bin = root / "bin"
+            fake_bin.mkdir(parents=True)
+            self._write_executable(
+                fake_bin / "docker",
+                "#!/usr/bin/env bash\n"
+                "if [[ \"${1:-}\" == \"compose\" && \"${2:-}\" == \"version\" ]]; then exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"ps\" ]]; then echo matrix_postgres; exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"inspect\" ]]; then echo healthy; exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"volume\" && \"${2:-}\" == \"inspect\" ]]; then exit 1; fi\n"
+                "if [[ \"${1:-}\" == \"network\" && \"${2:-}\" == \"inspect\" ]]; then exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"compose\" && \"${2:-}\" == \"up\" ]]; then echo docker:$* >> \"$EVENTS\"; exit 0; fi\n"
+                "if [[ \"${1:-}\" == \"exec\" ]]; then echo docker:$* >> \"$EVENTS\"; if [[ \"$*\" == *\" pg_restore \"* ]]; then cat >/dev/null; fi; exit 0; fi\n"
+                "exit 0\n",
+            )
+
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+            env["EVENTS"] = str(events)
+
+            result = subprocess.run(
+                ["bash", "restore.sh", "--file", str(archive_path), "--yes"],
+                cwd=root,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            lines = events.read_text().splitlines()
+            self.assertTrue(any("DROP DATABASE IF EXISTS mas" in line for line in lines))
+            self.assertTrue(any("CREATE DATABASE mas" in line for line in lines))
+            self.assertTrue(any("pg_restore" in line and " mas " in line for line in lines))
 
 
 if __name__ == "__main__":

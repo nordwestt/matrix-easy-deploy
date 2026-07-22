@@ -15,6 +15,7 @@ RESTORE_PERSISTENT_PATHS=(
     ".matrix-easy-deploy/modules.yaml"
     "modules/core/synapse_data"
     "modules/core/tuwunel_data"
+    "modules/calls/guest/tuwunel_data"
     "modules/hookshot/hookshot"
     "modules/whatsapp-bridge/whatsapp"
     "modules/slack-bridge/slack"
@@ -118,25 +119,31 @@ restore_payload_restore_database_dump() {
         return 0
     fi
 
-    if [[ "${db_user}" == "mautrix_whatsapp" || "${db_user}" == "mautrix_slack" ]]; then
+    if [[ "${db_user}" == "mautrix_whatsapp" || "${db_user}" == "mautrix_slack" || "${db_user}" == "mas" ]]; then
         local db_password_key=""
         case "${db_user}" in
             mautrix_whatsapp) db_password_key="WA_DB_PASSWORD" ;;
             mautrix_slack) db_password_key="SL_DB_PASSWORD" ;;
+            mas) db_password_key="MAS_DB_PASSWORD" ;;
         esac
 
         local db_password
         db_password="$(restore_payload_read_state_secret "${db_password_key}")"
         [[ -n "${db_password}" ]] || die "${db_password_key} not available in .matrix-easy-deploy/secrets.yaml"
 
-        info "Ensuring bridge database '${dump_name}' exists..."
+        local db_label="bridge"
+        if [[ "${db_user}" == "mas" ]]; then
+            db_label="MAS"
+        fi
+
+        info "Ensuring ${db_label} database '${dump_name}' exists..."
         ensure_postgres_role_and_database \
             "${postgres_password_value}" \
             "${db_user}" \
             "${db_password}" \
             "${dump_name}"
 
-        info "Restoring bridge database '${dump_name}'..."
+        info "Restoring ${db_label} database '${dump_name}'..."
         docker exec -e PGPASSWORD="${postgres_password_value}" matrix_postgres \
             psql -U synapse -d postgres -c "DROP DATABASE IF EXISTS ${dump_name} WITH (FORCE);"
         docker exec -e PGPASSWORD="${postgres_password_value}" matrix_postgres \

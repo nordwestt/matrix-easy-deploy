@@ -11,6 +11,7 @@ from scripts.backup_payload import (
     resolve_database_dumps,
     resolve_persistent_paths,
     resolve_server_implementation,
+    mas_enabled,
     write_manifest,
     load_manifest,
     normalize_database_dumps,
@@ -18,14 +19,21 @@ from scripts.backup_payload import (
 
 
 class BackupPayloadTests(unittest.TestCase):
-    def test_synapse_plan_includes_synapse_dump(self):
+    def test_synapse_plan_includes_synapse_and_mas_dumps(self):
         deploy = {
             "matrix": {"server_implementation": "synapse"},
             "modules": {},
         }
         dumps = resolve_database_dumps(deploy)
-        self.assertEqual(len(dumps), 1)
-        self.assertEqual(dumps[0]["name"], "synapse")
+        names = {item["name"] for item in dumps}
+        self.assertEqual(names, {"synapse", "mas"})
+        mas_dump = next(item for item in dumps if item["name"] == "mas")
+        self.assertEqual(mas_dump["db_user"], "mas")
+        self.assertEqual(mas_dump["path"], "database/mas.dump")
+
+    def test_mas_enabled_only_for_synapse(self):
+        self.assertTrue(mas_enabled({"matrix": {"server_implementation": "synapse"}}))
+        self.assertFalse(mas_enabled({"matrix": {"server_implementation": "tuwunel"}}))
 
     def test_tuwunel_plan_includes_tuwunel_data_path(self):
         deploy = {"matrix": {"server_implementation": "tuwunel"}}
@@ -43,7 +51,7 @@ class BackupPayloadTests(unittest.TestCase):
         }
         dumps = resolve_database_dumps(deploy)
         names = {item["name"] for item in dumps}
-        self.assertEqual(names, {"synapse", "mautrix_whatsapp", "custom_slack"})
+        self.assertEqual(names, {"synapse", "mas", "mautrix_whatsapp", "custom_slack"})
 
     def test_manifest_v2_and_restore_normalization(self):
         with tempfile.TemporaryDirectory() as tmp:
