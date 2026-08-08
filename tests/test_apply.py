@@ -85,7 +85,7 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(derived["MAS_UPSTREAM_PROVIDER_COUNT"], "1")
         self.assertEqual(derived["MAS_UPSTREAM_PROVIDER_NAMES"], "Google")
         self.assertEqual(derived["LOCAL_LOGIN_ENABLED"], "false")
-        self.assertIn("msc3861:", derived["SYNAPSE_MAS_EXPERIMENTAL_SECTION"])
+        self.assertIn("matrix_authentication_service:", derived["SYNAPSE_MAS_AUTH_SERVICE_SECTION"])
 
     def test_derive_values_sso_only(self):
         cfg = self.sample_config()
@@ -902,7 +902,8 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("password_config:\n  enabled: false", synapse)
         self.assertIn("login_via_existing_session:\n  enabled: false", synapse)
         self.assertIn("oidc_providers: []", synapse)
-        self.assertIn("msc3861:", synapse)
+        self.assertIn("matrix_authentication_service:", synapse)
+        self.assertNotIn("msc3861:", synapse)
         self.assertIn("org.matrix.msc2965.authentication:", synapse)
         mas_cfg = (self.root / "modules/mas/config.yaml").read_text()
         self.assertIn("matrix.example.com/auth/", mas_cfg)

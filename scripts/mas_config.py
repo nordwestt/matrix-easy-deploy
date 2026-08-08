@@ -16,6 +16,9 @@ import yaml
 MAS_SYNAPSE_CLIENT_ID = "0000000000000000000SYNAPSE"
 MAS_PATH_PREFIX = "/auth"
 MAS_DOCKER_ASSETS_PATH = "/usr/local/share/mas-cli/assets/"
+# Internal Docker DNS name for Synapse → MAS HTTP (no underscores; Synapse IDNA rejects them).
+MAS_DOCKER_HOST = "matrix-mas"
+MAS_DOCKER_ENDPOINT = f"http://{MAS_DOCKER_HOST}:8080/"
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
@@ -594,26 +597,25 @@ def build_mas_signing_keys_yaml_from_state(state: dict) -> str:
 def build_synapse_mas_sections(*, enabled: bool, server_name: str, mas_public_base: str, secrets: dict) -> dict[str, str]:
     if not enabled:
         return {
+            "SYNAPSE_MAS_AUTH_SERVICE_SECTION": "",
             "SYNAPSE_MAS_EXPERIMENTAL_SECTION": "",
             "SYNAPSE_MAS_WELL_KNOWN_SECTION": "",
             "SYNAPSE_OIDC_PROVIDERS": "[]",
         }
 
-    client_secret = secrets.get("MAS_SYNAPSE_CLIENT_SECRET", "")
     admin_token = secrets.get("MAS_HOMESERVER_SECRET", "")
     account_base = mas_public_base.rstrip("/")
+    auth_service = "\n".join(
+        [
+            "matrix_authentication_service:",
+            "  enabled: true",
+            '  endpoint: "' + MAS_DOCKER_ENDPOINT + '"',
+            f'  secret: "{admin_token}"',
+        ]
+    )
     experimental = "\n".join(
         [
-            "  msc3861:",
-            "    enabled: true",
-            f"    issuer: https://{server_name}/",
-            f"    client_id: {MAS_SYNAPSE_CLIENT_ID}",
-            "    client_auth_method: client_secret_basic",
-            f'    client_secret: "{client_secret}"',
-            f'    admin_token: "{admin_token}"',
-            f'    account_management_url: "{account_base}/account"',
             "  msc4108_enabled: true",
-            "  msc4190_enabled: true",
         ]
     )
     well_known = "\n".join(
@@ -624,6 +626,7 @@ def build_synapse_mas_sections(*, enabled: bool, server_name: str, mas_public_ba
         ]
     )
     return {
+        "SYNAPSE_MAS_AUTH_SERVICE_SECTION": auth_service,
         "SYNAPSE_MAS_EXPERIMENTAL_SECTION": experimental,
         "SYNAPSE_MAS_WELL_KNOWN_SECTION": well_known,
         "SYNAPSE_OIDC_PROVIDERS": "[]",

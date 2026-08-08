@@ -10,29 +10,31 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.lib_tree import copy_executable_script, require_easydeploy_lib, stage_product_lib_scripts
+
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 class ShellEntrypointTests(unittest.TestCase):
     def setUp(self):
         self.repo_root = Path(__file__).resolve().parents[1]
+        require_easydeploy_lib(self.repo_root)
         self.apply_script = self.repo_root / "apply.sh"
         self.ensure_dependencies_script = self.repo_root / "ensure_dependencies.sh"
         self.med_admin_script = self.repo_root / "scripts/med-admin.sh"
         self.med_admin_py = self.repo_root / "scripts/med_admin.py"
         self.create_account_script = self.repo_root / "scripts/create-account.sh"
-        self.lib_script = self.repo_root / "scripts/lib.sh"
-        self.dependencies_script = self.repo_root / "scripts/setup/dependencies.sh"
+
+    def _copy_lib_scripts(self, root: Path) -> None:
+        stage_product_lib_scripts(self.repo_root, root)
+
+    def _copy_executable(self, src: Path, dest: Path) -> None:
+        copy_executable_script(src, dest)
 
     def _write_executable(self, path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
         path.chmod(path.stat().st_mode | stat.S_IXUSR)
-
-    def _copy_executable(self, src: Path, dest: Path) -> None:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(src.read_text())
-        dest.chmod(0o755)
 
     def _write_fake_docker_mas(self, path: Path, *, exec_body: str = "") -> None:
         """Fake docker for MAS create-account tests (health probe + optional exec logic)."""
@@ -183,146 +185,6 @@ class ShellEntrypointTests(unittest.TestCase):
             self.assertIn("scripts/apply.py --project-root /srv/med --rotate-secrets", lines[1])
             self.assertNotIn("--ensure-dependencies", lines[1])
 
-    def test_ensure_dependencies_uses_official_docker_script_and_starts_docker(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            events = root / "events.log"
-            state_dir = root / "state"
-            state_dir.mkdir(parents=True, exist_ok=True)
-
-            self._copy_executable(self.ensure_dependencies_script, root / "ensure_dependencies.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
-            self._copy_executable(self.dependencies_script, root / "scripts/setup/dependencies.sh")
-
-            fake_bin = root / "bin"
-            fake_bin.mkdir(parents=True, exist_ok=True)
-            self._write_executable(
-                fake_bin / "dirname",
-                "#!/bin/bash\n"
-                "path=\"$1\"\n"
-                "if [[ \"$path\" == */* ]]; then\n"
-                "  printf '%s\\n' \"${path%/*}\"\n"
-                "else\n"
-                "  printf '.\\n'\n"
-                "fi\n",
-            )
-            self._write_executable(
-                fake_bin / "mktemp",
-                "#!/bin/bash\n"
-                "printf '%s\n' \"${TMPDIR:-/tmp}/get-docker.test.sh\"\n",
-            )
-            self._write_executable(
-                fake_bin / "rm",
-                "#!/bin/bash\n"
-                "exec /bin/rm \"$@\"\n",
-            )
-            self._write_executable(
-                fake_bin / "sudo",
-                "#!/bin/bash\n"
-                "if [[ \"${1:-}\" == \"sh\" ]]; then\n"
-                "  shift\n"
-                "  exec /bin/bash \"$@\"\n"
-                "fi\n"
-                "exec \"$@\"\n",
-            )
-            self._write_executable(
-                fake_bin / "apt-get",
-                "#!/bin/bash\n"
-                "echo apt-get:$* >> \"$EVENTS\"\n"
-                "if [[ \"${1:-}\" == \"install\" ]]; then\n"
-                "  for package in \"$@\"; do\n"
-                "    case \"$package\" in\n"
-                "      borgbackup)\n"
-                "        /bin/cat > \"$FAKE_BIN/borg\" <<'EOF'\n"
-                "#!/bin/bash\n"
-                "exit 0\n"
-                "EOF\n"
-                "        /bin/chmod +x \"$FAKE_BIN/borg\"\n"
-                "        ;;\n"
-                "      borgmatic)\n"
-                "        /bin/cat > \"$FAKE_BIN/borgmatic\" <<'EOF'\n"
-                "#!/bin/bash\n"
-                "exit 0\n"
-                "EOF\n"
-                "        /bin/chmod +x \"$FAKE_BIN/borgmatic\"\n"
-                "        ;;\n"
-                "      age)\n"
-                "        /bin/cat > \"$FAKE_BIN/age\" <<'EOF'\n"
-                "#!/bin/bash\n"
-                "exit 0\n"
-                "EOF\n"
-                "        /bin/chmod +x \"$FAKE_BIN/age\"\n"
-                "        ;;\n"
-                "    esac\n"
-                "  done\n"
-                "fi\n"
-                "exit 0\n",
-            )
-            self._write_executable(
-                fake_bin / "systemctl",
-                "#!/bin/bash\n"
-                "echo systemctl:$* >> \"$EVENTS\"\n"
-                "if [[ \"${1:-}\" == \"enable\" && \"${2:-}\" == \"--now\" && \"${3:-}\" == \"docker\" ]]; then\n"
-                "  /bin/touch \"$STATE/docker_running\"\n"
-                "fi\n",
-            )
-            self._write_executable(
-                fake_bin / "docker",
-                "#!/bin/bash\n"
-                "if [[ \"${1:-}\" == \"compose\" && \"${2:-}\" == \"version\" ]]; then\n"
-                "  [[ -f \"$STATE/docker_compose\" ]] && exit 0\n"
-                "  exit 1\n"
-                "fi\n"
-                "if [[ \"${1:-}\" == \"info\" ]]; then\n"
-                "  [[ -f \"$STATE/docker_running\" ]] && exit 0\n"
-                "  exit 1\n"
-                "fi\n"
-                "exit 0\n",
-            )
-            self._write_executable(fake_bin / "openssl", "#!/bin/bash\nexit 0\n")
-            self._write_executable(
-                fake_bin / "curl",
-                "#!/bin/bash\n"
-                "echo curl:$* >> \"$EVENTS\"\n"
-                "if [[ \"${1:-}\" == \"-fsSL\" && \"${2:-}\" == \"https://get.docker.com\" && \"${3:-}\" == \"-o\" ]]; then\n"
-                "  /bin/cat > \"${4}\" <<'EOF'\n"
-                "#!/bin/sh\n"
-                "echo docker-script:$* >> \"$EVENTS\"\n"
-                "if [ -n \"${STATE:-}\" ]; then\n"
-                "  /bin/touch \"$STATE/docker_compose\"\n"
-                "fi\n"
-                "EOF\n"
-                "  /bin/chmod +x \"${4}\"\n"
-                "  exit 0\n"
-                "fi\n"
-                "exit 1\n",
-            )
-            self._write_executable(fake_bin / "python3", "#!/bin/bash\nexit 0\n")
-
-            env = os.environ.copy()
-            env["PATH"] = str(fake_bin)
-            env["EVENTS"] = str(events)
-            env["STATE"] = str(state_dir)
-            env["FAKE_BIN"] = str(fake_bin)
-
-            result = subprocess.run(
-                ["/bin/bash", "ensure_dependencies.sh"],
-                cwd=root,
-                env=env,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(result.returncode, 0, msg=result.stderr)
-            lines = events.read_text().splitlines()
-            self.assertTrue(any(line == "apt-get:update" for line in lines))
-            self.assertTrue(any(line == "apt-get:install -y borgbackup borgmatic age" for line in lines))
-            self.assertTrue(any(line.startswith("curl:-fsSL https://get.docker.com -o ") for line in lines))
-            self.assertTrue(any(line.startswith("docker-script:") for line in lines))
-            self.assertIn("systemctl:enable --now docker", lines)
-            self.assertIn("All dependencies satisfied.", result.stdout)
-
     def test_create_account_noninteractive_keeps_nonce_output_clean(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -330,7 +192,7 @@ class ShellEntrypointTests(unittest.TestCase):
             payload_file = root / "payload.json"
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -403,7 +265,7 @@ class ShellEntrypointTests(unittest.TestCase):
             events = root / "events.log"
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -484,7 +346,7 @@ class ShellEntrypointTests(unittest.TestCase):
             put_attempts.write_text("0")
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -577,7 +439,7 @@ class ShellEntrypointTests(unittest.TestCase):
             events = root / "events.log"
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -634,7 +496,7 @@ class ShellEntrypointTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"

@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=scripts/lib.sh
 source "${SCRIPT_DIR}/scripts/lib.sh"
-# shellcheck source=scripts/setup/dependencies.sh
-source "${SCRIPT_DIR}/scripts/setup/dependencies.sh"
+# shellcheck source=scripts/deps_config.sh
+source "${SCRIPT_DIR}/scripts/deps_config.sh"
 
 ensure_dependencies_installed

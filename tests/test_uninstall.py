@@ -7,14 +7,16 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.lib_tree import require_easydeploy_lib, stage_product_lib_scripts
+
 pytestmark = pytest.mark.integration
 
 
 class UninstallScriptTests(unittest.TestCase):
     def setUp(self):
         self.repo_root = Path(__file__).resolve().parents[1]
+        require_easydeploy_lib(self.repo_root)
         self.uninstall_script = self.repo_root / "uninstall.sh"
-        self.lib_script = self.repo_root / "scripts/lib.sh"
 
     def _write_executable(self, path: Path, content: str) -> None:
         path.write_text(content)
@@ -39,7 +41,7 @@ class UninstallScriptTests(unittest.TestCase):
             (root / "caddy").mkdir(parents=True)
             (root / ".matrix-easy-deploy").mkdir(parents=True)
 
-            (root / "scripts/lib.sh").write_text(self.lib_script.read_text())
+            stage_product_lib_scripts(self.repo_root, root)
             (root / "uninstall.sh").write_text(self.uninstall_script.read_text())
             (root / "uninstall.sh").chmod(0o755)
 

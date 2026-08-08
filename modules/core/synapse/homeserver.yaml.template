@@ -59,9 +59,16 @@ signing_key_path: /data/{{SERVER_NAME}}.signing.key
 # Trusted key servers for key fetching
 trusted_key_servers:
   - server_name: "matrix.org"
+    suppress_key_server_warning: true
 
 # Report statistics to matrix.org (set to false to opt out)
 report_stats: false
+
+# ----------------------------------------------------------------------------
+# Matrix Authentication Service (delegated auth)
+# ----------------------------------------------------------------------------
+
+{{SYNAPSE_MAS_AUTH_SERVICE_SECTION}}
 
 # ----------------------------------------------------------------------------
 # Device linking / QR sign-in
