@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -25,8 +26,14 @@ class BackupRestoreScriptTests(unittest.TestCase):
         path.chmod(mode | stat.S_IXUSR)
 
     def _copy_support_scripts(self, root: Path) -> None:
+        easydeploy_dest = root / "easydeploy-lib"
+        if easydeploy_dest.exists():
+            shutil.rmtree(easydeploy_dest)
+        shutil.copytree(self.repo_root / "easydeploy-lib", easydeploy_dest)
         for rel in (
             "scripts/lib.sh",
+            "scripts/lib_matrix.sh",
+            "scripts/deps_config.sh",
             "scripts/backup_config.py",
             "scripts/backup_payload.py",
             "scripts/backup_payload.sh",

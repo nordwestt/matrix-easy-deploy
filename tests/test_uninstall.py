@@ -1,4 +1,5 @@
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -15,6 +16,23 @@ class UninstallScriptTests(unittest.TestCase):
         self.repo_root = Path(__file__).resolve().parents[1]
         self.uninstall_script = self.repo_root / "uninstall.sh"
         self.lib_script = self.repo_root / "scripts/lib.sh"
+        self.easydeploy_lib = self.repo_root / "easydeploy-lib"
+
+    def _copy_lib_tree(self, root: Path) -> None:
+        dest = root / "easydeploy-lib"
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(self.easydeploy_lib, dest)
+        for rel in (
+            "scripts/lib.sh",
+            "scripts/lib_matrix.sh",
+            "scripts/deps_config.sh",
+        ):
+            src = self.repo_root / rel
+            out = root / rel
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(src.read_text())
+            out.chmod(0o755)
 
     def _write_executable(self, path: Path, content: str) -> None:
         path.write_text(content)
@@ -39,7 +57,7 @@ class UninstallScriptTests(unittest.TestCase):
             (root / "caddy").mkdir(parents=True)
             (root / ".matrix-easy-deploy").mkdir(parents=True)
 
-            (root / "scripts/lib.sh").write_text(self.lib_script.read_text())
+            self._copy_lib_tree(root)
             (root / "uninstall.sh").write_text(self.uninstall_script.read_text())
             (root / "uninstall.sh").chmod(0o755)
 

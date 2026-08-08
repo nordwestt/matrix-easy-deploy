@@ -31,6 +31,12 @@ No extra secrets are required beyond the default `GITHUB_TOKEN`.
 - `HOMEBREW_TAP_REPO` (example: `your-org/homebrew-tap`)
 - `HOMEBREW_TAP_TOKEN` (PAT with repo write access to the tap repository)
 
+## Notes
+
+- Release checkouts use `submodules: recursive` so CI sees `easydeploy-lib`.
+- Source tarballs bundle the parent repo **and** the pinned `easydeploy-lib` commit (GitHub’s default tag zip does not include submodule files).
+- Clone products with `git clone --recurse-submodules` or run `git submodule update --init --recursive` after clone.
+
 ## Image names
 
 GHCR:

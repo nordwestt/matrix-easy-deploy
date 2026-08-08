@@ -22,7 +22,23 @@ class ShellEntrypointTests(unittest.TestCase):
         self.med_admin_py = self.repo_root / "scripts/med_admin.py"
         self.create_account_script = self.repo_root / "scripts/create-account.sh"
         self.lib_script = self.repo_root / "scripts/lib.sh"
-        self.dependencies_script = self.repo_root / "scripts/setup/dependencies.sh"
+        self.lib_matrix_script = self.repo_root / "scripts/lib_matrix.sh"
+        self.deps_config_script = self.repo_root / "scripts/deps_config.sh"
+        self.easydeploy_lib = self.repo_root / "easydeploy-lib"
+
+    def _copy_easydeploy_lib_tree(self, root: Path) -> None:
+        import shutil
+
+        dest = root / "easydeploy-lib"
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(self.easydeploy_lib, dest)
+
+    def _copy_lib_scripts(self, root: Path) -> None:
+        self._copy_easydeploy_lib_tree(root)
+        self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+        self._copy_executable(self.lib_matrix_script, root / "scripts/lib_matrix.sh")
+        self._copy_executable(self.deps_config_script, root / "scripts/deps_config.sh")
 
     def _write_executable(self, path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,8 +207,7 @@ class ShellEntrypointTests(unittest.TestCase):
             state_dir.mkdir(parents=True, exist_ok=True)
 
             self._copy_executable(self.ensure_dependencies_script, root / "ensure_dependencies.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
-            self._copy_executable(self.dependencies_script, root / "scripts/setup/dependencies.sh")
+            self._copy_lib_scripts(root)
 
             fake_bin = root / "bin"
             fake_bin.mkdir(parents=True, exist_ok=True)
@@ -330,7 +345,7 @@ class ShellEntrypointTests(unittest.TestCase):
             payload_file = root / "payload.json"
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -403,7 +418,7 @@ class ShellEntrypointTests(unittest.TestCase):
             events = root / "events.log"
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -484,7 +499,7 @@ class ShellEntrypointTests(unittest.TestCase):
             put_attempts.write_text("0")
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -577,7 +592,7 @@ class ShellEntrypointTests(unittest.TestCase):
             events = root / "events.log"
 
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"
@@ -634,7 +649,7 @@ class ShellEntrypointTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._copy_executable(self.create_account_script, root / "scripts/create-account.sh")
-            self._copy_executable(self.lib_script, root / "scripts/lib.sh")
+            self._copy_lib_scripts(root)
             (root / ".env").write_text(
                 "SERVER_NAME=example.com\n"
                 "MATRIX_DOMAIN=matrix.example.com\n"

@@ -128,8 +128,14 @@ This project makes setup even easier. It doesn't take power away from you — bu
 ## Quick start
 
 ```bash
-git clone https://github.com/nordwestt/matrix-easy-deploy-kit
+git clone --recurse-submodules https://github.com/nordwestt/matrix-easy-deploy-kit
 cd matrix-easy-deploy-kit
+```
+
+If you already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
 ```
 
 ### Recommended workflow (YAML-first)
@@ -870,11 +876,13 @@ matrix-easy-deploy/
 │           └── registration.yaml # Generated during module setup
 │
 └── scripts/
-    ├── lib.sh                    # Shared shell utilities
+    ├── lib.sh                    # Product shell utilities (sources easydeploy-lib)
+    ├── lib_matrix.sh             # Matrix-specific compose/runtime helpers
+    ├── deps_config.sh            # Host dependency list for easydeploy-lib
     ├── sso.sh                    # SSO/OIDC setup helpers (used by matrix-wizard.sh)
     ├── setup/                    # matrix-wizard.sh internals (modularized wizard steps)
     │   ├── banner.sh             # Intro banner output
-    │   ├── dependencies.sh       # Dependency checks
+    │   ├── dependencies.sh       # Shim (logic in easydeploy-lib submodule)
     │   ├── config.sh             # Interactive configuration prompts
     │   ├── generate.sh           # Secrets + template rendering
     │   ├── runtime.sh            # Docker setup/start + admin bootstrap
@@ -883,6 +891,7 @@ matrix-easy-deploy/
     ├── med-admin.sh              # Thin wrapper for the med-admin Python CLI
     ├── med_admin.py              # Operator admin CLI (bootstrap/list/query/reset/rooms)
     └── create-account.sh         # Account registration helper (user or admin)
+├── easydeploy-lib/              # Git submodule: shared Bash infrastructure
 ├── ensure_dependencies.sh       # Non-interactive host dependency installer
 ```
 
