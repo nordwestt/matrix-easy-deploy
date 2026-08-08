@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -9,13 +8,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.lib_tree import copy_executable_script, require_easydeploy_lib, stage_product_lib_scripts
+
 pytestmark = pytest.mark.integration
 
 
 class BackupRestoreScriptTests(unittest.TestCase):
     def setUp(self):
         self.repo_root = Path(__file__).resolve().parents[1]
-        self.lib_script = self.repo_root / "scripts/lib.sh"
+        require_easydeploy_lib(self.repo_root)
         self.backup_config_script = self.repo_root / "scripts/backup_config.py"
         self.backup_script = self.repo_root / "backup.sh"
         self.restore_script = self.repo_root / "restore.sh"
@@ -26,14 +27,8 @@ class BackupRestoreScriptTests(unittest.TestCase):
         path.chmod(mode | stat.S_IXUSR)
 
     def _copy_support_scripts(self, root: Path) -> None:
-        easydeploy_dest = root / "easydeploy-lib"
-        if easydeploy_dest.exists():
-            shutil.rmtree(easydeploy_dest)
-        shutil.copytree(self.repo_root / "easydeploy-lib", easydeploy_dest)
+        stage_product_lib_scripts(self.repo_root, root)
         for rel in (
-            "scripts/lib.sh",
-            "scripts/lib_matrix.sh",
-            "scripts/deps_config.sh",
             "scripts/backup_config.py",
             "scripts/backup_payload.py",
             "scripts/backup_payload.sh",
@@ -42,12 +37,7 @@ class BackupRestoreScriptTests(unittest.TestCase):
             "scripts/module_common.sh",
             "scripts/state_secrets.py",
         ):
-            src = self.repo_root / rel
-            dest = root / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(src.read_text())
-            if rel.endswith(".sh"):
-                dest.chmod(0o755)
+            copy_executable_script(self.repo_root / rel, root / rel)
 
     def _create_min_repo(self, root: Path) -> None:
         (root / "scripts").mkdir(parents=True)

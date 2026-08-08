@@ -6,7 +6,20 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers.lib_tree import easydeploy_lib_available
 from tests.helpers.project_tree import build_minimal_project
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    if easydeploy_lib_available(repo_root):
+        return
+    skip = pytest.mark.skip(
+        reason="easydeploy-lib submodule not initialized (git submodule update --init --recursive)"
+    )
+    for item in items:
+        if "integration" in item.keywords or "slow" in item.keywords:
+            item.add_marker(skip)
 
 
 @pytest.fixture(autouse=True)
