@@ -13,11 +13,11 @@ wait_for_mas_http() {
     info "Waiting for MAS to be ready…"
     local attempt=0
     until docker exec "$homeserver_container" python3 -c \
-        'import urllib.request; urllib.request.urlopen("http://matrix_mas:8080/health", timeout=5)' \
+        'import urllib.request; urllib.request.urlopen("http://matrix-mas:8080/health", timeout=5)' \
         2>/dev/null; do
         attempt=$((attempt + 1))
         if [[ $attempt -ge $max_attempts ]]; then
-            error "Timed out waiting for MAS HTTP health at http://matrix_mas:8080/health"
+            error "Timed out waiting for MAS HTTP health at http://matrix-mas:8080/health"
             return 1
         fi
         echo -ne "    attempt ${attempt}/${max_attempts}…\r"

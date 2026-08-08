@@ -17,5 +17,5 @@ if ! docker inspect matrix_mas &>/dev/null; then
 fi
 
 response="$(docker exec "$HS_CONTAINER" python3 -c \
-    'import urllib.request; print(urllib.request.urlopen("http://matrix_mas:8080/health", timeout=5).read().decode())')"
+    'import urllib.request; print(urllib.request.urlopen("http://matrix-mas:8080/health", timeout=5).read().decode())')"
 success "MAS health: ${response}"

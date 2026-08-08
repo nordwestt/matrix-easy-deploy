@@ -9,8 +9,12 @@ services:
     volumes:
       - ./config.yaml:/config/config.yaml:ro
     networks:
-      - matrix_internal
-      - caddy_net
+      matrix_internal:
+        aliases:
+          - matrix-mas
+      caddy_net:
+        aliases:
+          - matrix-mas
     # No Docker healthcheck: the official image is distroless (no curl/wget) and
     # mas-cli config check does not hit the HTTP /health endpoint. Use
     # scripts/mas_health.sh or wait_for_mas_http in setup scripts instead.

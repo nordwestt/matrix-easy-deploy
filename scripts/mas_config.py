@@ -16,6 +16,9 @@ import yaml
 MAS_SYNAPSE_CLIENT_ID = "0000000000000000000SYNAPSE"
 MAS_PATH_PREFIX = "/auth"
 MAS_DOCKER_ASSETS_PATH = "/usr/local/share/mas-cli/assets/"
+# Internal Docker DNS name for Synapse → MAS HTTP (no underscores; Synapse IDNA rejects them).
+MAS_DOCKER_HOST = "matrix-mas"
+MAS_DOCKER_ENDPOINT = f"http://{MAS_DOCKER_HOST}:8080/"
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
@@ -606,7 +609,7 @@ def build_synapse_mas_sections(*, enabled: bool, server_name: str, mas_public_ba
         [
             "matrix_authentication_service:",
             "  enabled: true",
-            '  endpoint: "http://matrix_mas:8080/"',
+            '  endpoint: "' + MAS_DOCKER_ENDPOINT + '"',
             f'  secret: "{admin_token}"',
         ]
     )
