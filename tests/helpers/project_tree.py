@@ -169,6 +169,7 @@ def _write_core_templates(root: Path, *, full: bool) -> None:
             "  enabled: {{LOGIN_VIA_EXISTING_SESSION_ENABLED}}\n"
             "password_config:\n  enabled: {{LOCAL_LOGIN_ENABLED}}\n"
             "oidc_providers: {{OIDC_PROVIDERS_JSON}}\n"
+            "{{SYNAPSE_MAS_AUTH_SERVICE_SECTION}}\n"
             "extra_well_known_client_content:\n"
             "  org.matrix.msc4143.rtc_foci:\n"
             "    - type: livekit\n"
