@@ -18,6 +18,7 @@ source "${SCRIPT_DIR}/scripts/lib.sh"
 source "${SCRIPT_DIR}/scripts/deps_config.sh"
 
 # shellcheck source=scripts/setup/banner.sh
+source "${SCRIPT_DIR}/scripts/setup/banner.sh"
 # shellcheck source=scripts/setup/runtime.sh
 source "${SCRIPT_DIR}/scripts/setup/runtime.sh"
 # shellcheck source=scripts/setup/summary.sh
