@@ -87,6 +87,43 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(derived["LOCAL_LOGIN_ENABLED"], "false")
         self.assertIn("matrix_authentication_service:", derived["SYNAPSE_MAS_AUTH_SERVICE_SECTION"])
 
+    def test_derive_values_authelia_disables_mas_password_login(self):
+        cfg = self.sample_config()
+        cfg["features"]["local_login_enabled"] = True
+        cfg["features"]["sso"] = {
+            "enabled": True,
+            "provider": "authelia",
+            "providers": [
+                {
+                    "name": "Authelia",
+                    "issuer": "https://auth.example.com",
+                    "client_id": "matrix",
+                    "client_secret": "secret",
+                }
+            ],
+        }
+        derived = apply.derive_values(cfg, server_ip="1.2.3.4")
+        self.assertEqual(derived["MAS_LOCAL_LOGIN_ENABLED"], "false")
+
+    def test_derive_values_authelia_chooser_keeps_mas_password_login(self):
+        cfg = self.sample_config()
+        cfg["features"]["local_login_enabled"] = True
+        cfg["features"]["sso"] = {
+            "enabled": True,
+            "provider": "authelia",
+            "default_login": "chooser",
+            "providers": [
+                {
+                    "name": "Authelia",
+                    "issuer": "https://auth.example.com",
+                    "client_id": "matrix",
+                    "client_secret": "secret",
+                }
+            ],
+        }
+        derived = apply.derive_values(cfg, server_ip="1.2.3.4")
+        self.assertEqual(derived["MAS_LOCAL_LOGIN_ENABLED"], "true")
+
     def test_derive_values_sso_only(self):
         cfg = self.sample_config()
         cfg["features"]["local_login_enabled"] = False

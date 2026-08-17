@@ -479,6 +479,9 @@ def resolve_mas_runtime_config(config: dict) -> dict[str, Any]:
     hs_impl = homeserver.normalize_implementation(matrix.get("server_implementation", "synapse"))
     sso = get_sso_config(features)
     local_login_enabled = bool(features.get("local_login_enabled", True))
+    # Authelia-first: hide MAS password login so it auto-redirects to the only upstream IdP.
+    if resolve_sso_default_login(config) == SSO_DEFAULT_LOGIN_SSO:
+        local_login_enabled = False
 
     enabled = hs_impl == "synapse"
     return {

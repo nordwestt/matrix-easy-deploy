@@ -84,7 +84,7 @@ features:
     enabled: false
     # provider: authelia   # set by the wizard when a local Authelia is detected
     # managed: true        # set false to ignore engine/Authelia OIDC sidecars
-    # default_login: sso   # Authelia: Element goes straight to Authelia. Set chooser to show local + SSO.
+    # default_login: sso   # Authelia: skip the local+SSO chooser (MAS redirects to Authelia). Set chooser to show both.
     providers: []
     # Example provider (Google):
     # - id: 01HFVBY12TMNTYTBV8W921M5FA  # assigned by apply.sh if omitted
