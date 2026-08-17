@@ -190,7 +190,8 @@ bash apply.sh --skip-module-bootstrap
 ### Interactive wizard (optional UX)
 
 ```bash
-bash matrix-wizard.sh
+bash wizard.sh
+# same as: bash matrix-wizard.sh
 ```
 
 The wizard is a convenience layer over the same YAML-first model. It edits `deploy.yaml`, runs apply, and offers module/user/runtime shortcuts.
@@ -825,7 +826,8 @@ If `features.local_login_enabled: false`, password account creation is blocked; 
 ```
 matrix-easy-deploy/
 │
-├── matrix-wizard.sh                      # The wizard. Start here.
+├── wizard.sh                             # Standard Easy Deploy entrypoint (wraps matrix-wizard.sh)
+├── matrix-wizard.sh                      # Wizard implementation
 ├── start.sh                      # Bring everything back up
 ├── stop.sh                       # Bring everything down (data is preserved)
 ├── update.sh                     # Pull latest images and restart
