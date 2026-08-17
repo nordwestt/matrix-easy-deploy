@@ -109,6 +109,19 @@ class MasConfigUpstreamOauth2Tests(unittest.TestCase):
             "https://matrix.example.com/auth/upstream/callback/01HFVBY12TMNTYTBV8W921M5FA",
         )
 
+    def test_matrix_authelia_redirect_uri_matches_mas_public_base(self):
+        uri = mas_config.matrix_authelia_redirect_uri("matrix.test.example", "auth.test.example")
+        provider_id = mas_config.matrix_authelia_provider_id("auth.test.example")
+        self.assertEqual(len(provider_id), 26)
+        self.assertEqual(
+            uri,
+            f"https://matrix.test.example/auth/upstream/callback/{provider_id}",
+        )
+        self.assertEqual(
+            mas_config.matrix_authelia_provider_id("auth.test.example"),
+            mas_config.stable_provider_ulid("Authelia", "https://auth.test.example"),
+        )
+
     def test_build_mas_upstream_oauth2_yaml_uses_string_scope(self):
         providers = [
             {

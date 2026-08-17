@@ -731,11 +731,15 @@ During setup (default: enabled), provide:
 
 You can configure multiple providers in one run (for example Google + Okta + Authentik).
 
+When Authelia is already deployed next to this kit (or the engine wizard exported it), the Matrix wizard asks **Use Authelia at https://auth… as Matrix SSO?** and fills issuer, client ID, and secret for you. Re-apply Authelia afterwards so it picks up the generated client sidecar. Independent Matrix installs with no Authelia sibling keep the Google/Entra prompts.
+
 When creating the OIDC app in your identity provider, set the redirect/callback URL to:
 
 ```text
-https://<your-matrix-domain>/_synapse/client/oidc/callback
+https://<your-matrix-domain>/auth/upstream/callback/<provider-id>
 ```
+
+`apply.sh` assigns the 26-character provider id (and prints it in MAS config). Authelia on the same VPS is registered automatically.
 
 Example for Google:
 - Create an OAuth client in Google Cloud Console

@@ -82,6 +82,8 @@ features:
   local_login_enabled: true
   sso:
     enabled: false
+    # provider: authelia   # set by the wizard when a local Authelia is detected
+    # managed: true        # set false to ignore engine/Authelia OIDC sidecars
     providers: []
     # Example provider (Google):
     # - id: 01HFVBY12TMNTYTBV8W921M5FA  # assigned by apply.sh if omitted

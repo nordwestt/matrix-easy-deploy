@@ -33,6 +33,7 @@ DEPLOY_ENV="${SCRIPT_DIR}/.env"
 DEPLOY_YAML="${SCRIPT_DIR}/deploy.yaml"
 NO_APPLY=0
 PROXY_MODE="${EASYDEPLOY_PROXY_MODE:-}"
+FROM_ENGINE=0
 
 edit_deploy_config() {
     echo
@@ -119,6 +120,7 @@ edit_deploy_config() {
     else
         LOCAL_LOGIN_ENABLED="true"
         ENABLE_SSO="false"
+        SSO_PROVIDER=""
         OIDC_PROVIDERS_JSON="[]"
         OIDC_PROVIDER_COUNT="0"
         OIDC_PROVIDER_NAMES=""
@@ -297,7 +299,8 @@ edit_deploy_config() {
             --deploy-yaml "$DEPLOY_YAML" \
             --set-sso \
             --sso-enabled "$ENABLE_SSO" \
-            --sso-providers-json "$OIDC_PROVIDERS_JSON"
+            --sso-providers-json "$OIDC_PROVIDERS_JSON" \
+            --sso-provider "${SSO_PROVIDER:-}"
     fi
     success "Configuration saved to deploy.yaml"
 
@@ -851,6 +854,7 @@ while [[ $# -gt 0 ]]; do
         --from-engine)
             NO_APPLY=1
             PROXY_MODE="integrate"
+            FROM_ENGINE=1
             _parsed_args+=(--full-setup)
             shift
             ;;

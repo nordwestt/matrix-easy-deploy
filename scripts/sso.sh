@@ -60,24 +60,81 @@ print(json.dumps(provider, separators=(",", ":")))
 PY
 }
 
-gather_sso_config() {
-    ask_yn ENABLE_SSO_INPUT \
-        "Enable SSO login (OIDC/OAuth2, e.g. Google)?" \
-        "n"
+_append_oidc_provider_json() {
+    local provider_json="$1"
+    OIDC_PROVIDERS_JSON="$(
+        OIDC_PROVIDERS_JSON="$OIDC_PROVIDERS_JSON" \
+        OIDC_PROVIDER_JSON="$provider_json" \
+        python3 - <<'PY'
+import json
+import os
 
-    if [[ "$ENABLE_SSO_INPUT" != "y" ]]; then
-        ENABLE_SSO="false"
-        OIDC_PROVIDERS_JSON="[]"
-        OIDC_PROVIDER_COUNT="0"
-        OIDC_PROVIDER_NAMES=""
-        return 0
+providers = json.loads(os.environ.get("OIDC_PROVIDERS_JSON", "[]"))
+provider = json.loads(os.environ["OIDC_PROVIDER_JSON"])
+providers.append(provider)
+print(json.dumps(providers, separators=(",", ":")))
+PY
+    )"
+}
+
+gather_sso_config() {
+    local LOCAL_AUTHELIA_DOMAIN="" LOCAL_AUTHELIA_DEPLOY=""
+    local use_local_authelia="n"
+    SSO_PROVIDER=""
+    local deploy_yaml="${DEPLOY_YAML:-${SCRIPT_DIR}/deploy.yaml}"
+    eval "$(python3 "${SCRIPT_DIR}/scripts/config_edit.py" --deploy-yaml "$deploy_yaml" --print-local-authelia)"
+    if [[ -n "${LOCAL_AUTHELIA_DOMAIN:-}" ]]; then
+        if [[ "${FROM_ENGINE:-0}" == "1" ]]; then
+            use_local_authelia="y"
+            info "Using Authelia on this VPS at https://${LOCAL_AUTHELIA_DOMAIN} for Matrix SSO."
+        else
+            ask_yn use_local_authelia \
+                "Use Authelia at https://${LOCAL_AUTHELIA_DOMAIN} as Matrix SSO?" \
+                "y"
+        fi
     fi
 
-    ENABLE_SSO="true"
-    OIDC_PROVIDERS_JSON="[]"
-    OIDC_PROVIDER_COUNT=0
-    OIDC_PROVIDER_NAMES=""
+    if [[ "$use_local_authelia" == "y" ]]; then
+        if [[ -z "${LOCAL_AUTHELIA_DOMAIN:-}" ]]; then
+            die "Authelia was selected but no portal domain was found."
+        fi
+        ENABLE_SSO="true"
+        SSO_PROVIDER="authelia"
+        OIDC_PROVIDERS_JSON="[]"
+        OIDC_PROVIDER_COUNT=1
+        OIDC_PROVIDER_NAMES="Authelia"
+        info "OIDC issuer: https://${LOCAL_AUTHELIA_DOMAIN} (apply will register the Authelia client)."
+        if [[ "${FROM_ENGINE:-0}" == "1" ]]; then
+            return 0
+        fi
+        ask_yn _add_another_provider "Add another SSO provider (Google, Entra, …)?" "n"
+        if [[ "$_add_another_provider" != "y" ]]; then
+            return 0
+        fi
+    else
+        ask_yn ENABLE_SSO_INPUT \
+            "Enable SSO login (OIDC/OAuth2, e.g. Google)?" \
+            "${config_sso_default:-n}"
+
+        if [[ "$ENABLE_SSO_INPUT" != "y" ]]; then
+            ENABLE_SSO="false"
+            OIDC_PROVIDERS_JSON="[]"
+            OIDC_PROVIDER_COUNT="0"
+            OIDC_PROVIDER_NAMES=""
+            SSO_PROVIDER=""
+            return 0
+        fi
+
+        ENABLE_SSO="true"
+        OIDC_PROVIDERS_JSON="[]"
+        OIDC_PROVIDER_COUNT=0
+        OIDC_PROVIDER_NAMES=""
+    fi
+
     local _used_idp_ids=" "
+    if [[ "$SSO_PROVIDER" == "authelia" ]]; then
+        _used_idp_ids=" authelia "
+    fi
 
     while true; do
         OIDC_PROVIDER_COUNT=$((OIDC_PROVIDER_COUNT + 1))
@@ -182,19 +239,7 @@ gather_sso_config() {
             "$restrict_claim" \
             "$restrict_values")"
 
-        OIDC_PROVIDERS_JSON="$(
-            OIDC_PROVIDERS_JSON="$OIDC_PROVIDERS_JSON" \
-            OIDC_PROVIDER_JSON="$provider_json" \
-            python3 - <<'PY'
-import json
-import os
-
-providers = json.loads(os.environ.get("OIDC_PROVIDERS_JSON", "[]"))
-provider = json.loads(os.environ["OIDC_PROVIDER_JSON"])
-providers.append(provider)
-print(json.dumps(providers, separators=(",", ":")))
-PY
-        )"
+        _append_oidc_provider_json "$provider_json"
 
         if [[ -z "$OIDC_PROVIDER_NAMES" ]]; then
             OIDC_PROVIDER_NAMES="$provider_name"

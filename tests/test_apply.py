@@ -1504,6 +1504,84 @@ class ApplyTests(unittest.TestCase):
         mock_postgres.assert_called_once_with(ctx)
         mock_bootstrap.assert_called_once()
 
+    def test_apply_engine_oidc_sidecar_fills_authelia_provider(self):
+        sidecar = self.root / "oidc-provider.yaml"
+        sidecar.write_text(
+            "\n".join(
+                [
+                    "provider: authelia",
+                    "name: Authelia",
+                    "issuer: https://auth.test.example",
+                    "client_id: matrix",
+                    "client_secret: s3cret",
+                    "id: 01HFVBY12TMNTYTBV8W921M5FA",
+                    "allow_registration: true",
+                ]
+            )
+        )
+        config = {"features": {"sso": {"enabled": True, "provider": "authelia", "providers": []}}}
+        mas_config.apply_engine_oidc_sidecar(config, sidecar)
+        providers = config["features"]["sso"]["providers"]
+        self.assertEqual(len(providers), 1)
+        self.assertEqual(providers[0]["client_secret"], "s3cret")
+        self.assertEqual(providers[0]["issuer"], "https://auth.test.example")
+        self.assertEqual(providers[0]["id"], "01HFVBY12TMNTYTBV8W921M5FA")
+
+    def test_apply_engine_oidc_sidecar_skips_google_providers(self):
+        sidecar = self.root / "oidc-provider.yaml"
+        sidecar.write_text("provider: authelia\nissuer: https://auth.test.example\nclient_id: matrix\nclient_secret: x\n")
+        config = {
+            "features": {
+                "sso": {
+                    "enabled": True,
+                    "providers": [
+                        {
+                            "name": "Google",
+                            "issuer": "https://accounts.google.com/",
+                            "client_id": "g",
+                            "client_secret": "s",
+                        }
+                    ],
+                }
+            }
+        }
+        mas_config.apply_engine_oidc_sidecar(config, sidecar)
+        self.assertEqual(len(config["features"]["sso"]["providers"]), 1)
+        self.assertEqual(config["features"]["sso"]["providers"][0]["name"], "Google")
+
+    def test_provision_local_authelia_oidc_writes_sibling_sidecars(self):
+        layout = self.root / "layout"
+        matrix = layout / "matrix-easy-deploy"
+        authelia = layout / "authelia-easy-deploy"
+        matrix.mkdir(parents=True)
+        authelia.mkdir()
+        (authelia / "deploy.yaml").write_text(
+            yaml.safe_dump({"authelia": {"domain": "auth.test.example", "sso_domain": "test.example"}})
+        )
+        ctx = apply.ApplyContext(matrix)
+        config = {
+            "matrix": {"domain": "matrix.test.example"},
+            "features": {"sso": {"enabled": True, "provider": "authelia", "providers": []}},
+        }
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("EASYDEPLOY_AUTHELIA_DEPLOY", None)
+            os.environ.pop("EASYDEPLOY_AUTHELIA_DOMAIN", None)
+            notes = apply.provision_local_authelia_oidc(ctx, config)
+        sidecar = ctx.integration_dir / "oidc-provider.yaml"
+        client = authelia / ".authelia-easy-deploy" / "integration" / "oidc-clients.d" / "matrix.yaml"
+        self.assertTrue(sidecar.is_file(), notes)
+        self.assertTrue(client.is_file(), notes)
+        self.assertIn("oidc.managed", client.read_text())
+        provider = yaml.safe_load(sidecar.read_text())
+        authelia_client = yaml.safe_load(client.read_text())
+        self.assertEqual(provider["issuer"], "https://auth.test.example")
+        self.assertEqual(provider["client_id"], "matrix")
+        self.assertTrue(provider["client_secret"])
+        self.assertIn(provider["client_secret"], authelia_client["client_secret"])
+        self.assertTrue(authelia_client["redirect_uris"][0].startswith("https://matrix.test.example/auth/upstream/callback/"))
+        mas_config.apply_engine_oidc_sidecar(config, sidecar)
+        mas_config.validate_sso_config(config)
+
 
 if __name__ == "__main__":
     unittest.main()

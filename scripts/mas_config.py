@@ -9,6 +9,7 @@ import secrets
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -51,6 +52,194 @@ def mas_upstream_redirect_uri(mas_public_base: str, provider_id: str) -> str:
     """OAuth redirect URI registered with the upstream IdP."""
     base = mas_public_base.rstrip("/")
     return f"{base}/upstream/callback/{provider_id}"
+
+
+AUTHELIA_SSO_NAME = "Authelia"
+DEFAULT_MATRIX_OIDC_CLIENT_ID = "matrix"
+
+
+def authelia_issuer_url(authelia_domain: str) -> str:
+    return f"https://{str(authelia_domain).strip().rstrip('/')}"
+
+
+def matrix_authelia_provider_id(authelia_domain: str) -> str:
+    return stable_provider_ulid(AUTHELIA_SSO_NAME, authelia_issuer_url(authelia_domain))
+
+
+def matrix_authelia_redirect_uri(matrix_domain: str, authelia_domain: str) -> str:
+    return mas_upstream_redirect_uri(
+        mas_public_base(matrix_domain),
+        matrix_authelia_provider_id(authelia_domain),
+    )
+
+
+def managed_is_false(section: dict | None) -> bool:
+    value = (section or {}).get("managed")
+    if value is False:
+        return True
+    return str(value or "").strip().lower() in {"false", "no", "0"}
+
+
+def is_authelia_sso_provider(provider: dict | None) -> bool:
+    if not isinstance(provider, dict):
+        return False
+    name = str(provider.get("name") or "").strip().lower()
+    client_id = str(provider.get("client_id") or "").strip().lower()
+    issuer = str(provider.get("issuer") or "").strip().lower()
+    if name == "authelia":
+        return True
+    if client_id == DEFAULT_MATRIX_OIDC_CLIENT_ID or client_id.startswith("matrix-"):
+        return True
+    return "authelia" in issuer
+
+
+MATRIX_OIDC_SIDECAR_HEADER = (
+    "# Generated for Authelia OIDC. Secrets stay here, not in deploy.yaml.\n"
+    "# Set features.sso.managed: false to ignore.\n"
+)
+AUTHELIA_CLIENT_SIDECAR_HEADER = (
+    "# Generated for Matrix MAS. Re-apply Authelia after this file changes.\n"
+    "# Set oidc.managed: false to ignore kit/engine client sidecars.\n"
+)
+
+
+def _blank(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, dict):
+        return not value
+    return False
+
+
+def plaintext_oidc_secret(value: str) -> str:
+    secret = str(value or "").strip()
+    prefix = "$plaintext$"
+    if secret.startswith(prefix):
+        return secret[len(prefix) :]
+    return secret
+
+
+def authelia_client_secret_digest(secret: str) -> str:
+    digest = str(secret or "").strip()
+    if digest.startswith("$"):
+        return digest
+    return f"$plaintext${digest}"
+
+
+def write_oidc_sidecar(path: Path, data: dict, *, header: str = MATRIX_OIDC_SIDECAR_HEADER) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = yaml.safe_dump(data, default_flow_style=False, sort_keys=False)
+    path.write_text(header + body)
+
+
+def load_or_create_matrix_oidc_secret(matrix_sidecar: Path, authelia_sidecar: Path) -> str:
+    for path in (matrix_sidecar, authelia_sidecar):
+        if not path.is_file():
+            continue
+        data = yaml.safe_load(path.read_text()) or {}
+        if not isinstance(data, dict):
+            continue
+        secret = plaintext_oidc_secret(str(data.get("client_secret") or ""))
+        if secret and not secret.startswith("$"):
+            return secret
+    return secrets.token_urlsafe(32)
+
+
+def build_mas_authelia_provider(
+    *,
+    authelia_domain: str,
+    client_id: str,
+    client_secret: str,
+) -> dict[str, Any]:
+    issuer = authelia_issuer_url(authelia_domain)
+    return {
+        "provider": "authelia",
+        "name": AUTHELIA_SSO_NAME,
+        "issuer": issuer,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "id": matrix_authelia_provider_id(authelia_domain),
+        "allow_registration": True,
+        "scopes": ["openid", "profile", "email"],
+    }
+
+
+def build_authelia_matrix_client(
+    *,
+    matrix_domain: str,
+    authelia_domain: str,
+    client_id: str,
+    client_secret: str,
+    authorization_policy: str = "two_factor",
+) -> dict[str, Any]:
+    return {
+        "client_id": client_id,
+        "client_name": "Matrix",
+        "claims_policy": "matrix",
+        "public": False,
+        "authorization_policy": authorization_policy,
+        "require_pkce": False,
+        "token_endpoint_auth_method": "client_secret_basic",
+        "client_secret": authelia_client_secret_digest(client_secret),
+        "redirect_uris": [matrix_authelia_redirect_uri(matrix_domain, authelia_domain)],
+        "scopes": ["openid", "profile", "email"],
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+    }
+
+
+def apply_engine_oidc_sidecar(config: dict, sidecar_path: Path | None = None) -> None:
+    """Merge Authelia OIDC settings from a sidecar. Operator deploy.yaml wins when set."""
+    if sidecar_path is None or not sidecar_path.is_file():
+        return
+    sidecar = yaml.safe_load(sidecar_path.read_text()) or {}
+    if not isinstance(sidecar, dict):
+        return
+    features = config.setdefault("features", {})
+    if not isinstance(features, dict):
+        return
+    sso = features.setdefault("sso", {})
+    if not isinstance(sso, dict):
+        return
+    if managed_is_false(sso):
+        return
+    existing_provider = str(sso.get("provider") or "").strip().lower()
+    if existing_provider and existing_provider != "authelia":
+        return
+    providers = sso.get("providers")
+    if not isinstance(providers, list):
+        providers = []
+        sso["providers"] = providers
+    if providers and not any(is_authelia_sso_provider(item) for item in providers):
+        if existing_provider != "authelia":
+            return
+
+    entry = {
+        key: value
+        for key, value in sidecar.items()
+        if key not in {"provider", "managed"} and value not in (None, "")
+    }
+    if not entry.get("issuer") or not entry.get("client_id") or not entry.get("client_secret"):
+        return
+
+    match_index = None
+    for index, provider in enumerate(providers):
+        if is_authelia_sso_provider(provider):
+            match_index = index
+            break
+    if match_index is None:
+        providers.append(entry)
+    else:
+        merged = dict(providers[match_index])
+        for key, value in entry.items():
+            if _blank(merged.get(key)):
+                merged[key] = value
+        providers[match_index] = merged
+
+    sso["enabled"] = True
+    sso.setdefault("provider", "authelia")
 
 
 def ensure_sso_provider_ids(config: dict) -> bool:

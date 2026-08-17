@@ -1,6 +1,8 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -357,6 +359,30 @@ class ConfigEditTests(unittest.TestCase):
         self.assertIn("backup_keep_weekly=5", defaults)
         self.assertIn("backup_keep_monthly=9", defaults)
         self.assertIn("backup_keep_yearly=1", defaults)
+
+    def test_discover_local_authelia_sibling(self):
+        matrix = self.root / "matrix-easy-deploy"
+        authelia = self.root / "authelia-easy-deploy"
+        matrix.mkdir()
+        authelia.mkdir()
+        (authelia / "deploy.yaml").write_text(
+            yaml.safe_dump({"authelia": {"domain": "auth.opencomp.eu", "sso_domain": "opencomp.eu"}})
+        )
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("EASYDEPLOY_AUTHELIA_DEPLOY", None)
+            os.environ.pop("EASYDEPLOY_AUTHELIA_DOMAIN", None)
+            found = config_edit.discover_local_authelia(matrix)
+        self.assertEqual(found["domain"], "auth.opencomp.eu")
+        self.assertTrue(found["deploy"].endswith("authelia-easy-deploy/deploy.yaml"))
+
+    def test_update_sso_config_sets_authelia_provider(self):
+        config = config_edit.load_or_init(self.deploy_yaml)
+        config_edit.update_sso_config(config, enabled=True, providers=[], provider="authelia")
+        self.assertTrue(config["features"]["sso"]["enabled"])
+        self.assertEqual(config["features"]["sso"]["provider"], "authelia")
+        self.assertEqual(config["features"]["sso"]["providers"], [])
+        config_edit.update_sso_config(config, enabled=True, providers=[], provider="")
+        self.assertNotIn("provider", config["features"]["sso"])
 
 
 if __name__ == "__main__":

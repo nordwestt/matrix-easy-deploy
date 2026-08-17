@@ -390,6 +390,106 @@ def load_config(ctx: ApplyContext) -> dict:
     return config
 
 
+def oidc_provider_sidecar_path(ctx: ApplyContext) -> Path:
+    return ctx.integration_dir / "oidc-provider.yaml"
+
+
+def provision_local_authelia_oidc(ctx: ApplyContext, config: dict) -> list[str]:
+    """Write Authelia + MAS sidecars when Authelia is a sibling (standalone path)."""
+    notes: list[str] = []
+    features = config.get("features") if isinstance(config.get("features"), dict) else {}
+    sso = features.get("sso") if isinstance(features.get("sso"), dict) else {}
+    if mas_config.managed_is_false(sso):
+        return notes
+    provider = str(sso.get("provider") or "").strip().lower()
+    if provider and provider != "authelia":
+        return notes
+
+    sidecar_path = oidc_provider_sidecar_path(ctx)
+    if sidecar_path.is_file():
+        return notes
+
+    wants_authelia = provider == "authelia"
+    providers = sso.get("providers") if isinstance(sso.get("providers"), list) else []
+    if not wants_authelia:
+        if not bool(sso.get("enabled")):
+            return notes
+        if providers and not any(mas_config.is_authelia_sso_provider(item) for item in providers):
+            return notes
+        if providers and any(
+            isinstance(item, dict)
+            and mas_config.is_authelia_sso_provider(item)
+            and str(item.get("client_secret") or "").strip()
+            for item in providers
+        ):
+            return notes
+
+    from scripts.config_edit import discover_local_authelia
+
+    found = discover_local_authelia(ctx.project_root)
+    authelia_domain = str(found.get("domain") or "").strip()
+    authelia_deploy = str(found.get("deploy") or "").strip()
+    if not authelia_domain:
+        if wants_authelia:
+            notes.append(
+                "features.sso.provider is authelia but no local Authelia was found. "
+                "The engine sidecar, or a sibling authelia-easy-deploy checkout, is required."
+            )
+        return notes
+
+    matrix = config.get("matrix") if isinstance(config.get("matrix"), dict) else {}
+    matrix_domain = str(matrix.get("domain") or "").strip()
+    if not matrix_domain or matrix_domain == "matrix.example.com":
+        return notes
+
+    client_id = mas_config.DEFAULT_MATRIX_OIDC_CLIENT_ID
+    authelia_root = Path(authelia_deploy).parent if authelia_deploy else None
+    authelia_sidecar = (
+        authelia_root / ".authelia-easy-deploy" / "integration" / "oidc-clients.d" / f"{client_id}.yaml"
+        if authelia_root is not None
+        else Path()
+    )
+    secret = mas_config.load_or_create_matrix_oidc_secret(sidecar_path, authelia_sidecar)
+    mas_config.write_oidc_sidecar(
+        sidecar_path,
+        mas_config.build_mas_authelia_provider(
+            authelia_domain=authelia_domain,
+            client_id=client_id,
+            client_secret=secret,
+        ),
+    )
+    notes.append(f"Wrote Matrix Authelia OIDC sidecar ({sidecar_path}).")
+    if authelia_root is not None and authelia_root.is_dir():
+        mas_config.write_oidc_sidecar(
+            authelia_sidecar,
+            mas_config.build_authelia_matrix_client(
+                matrix_domain=matrix_domain,
+                authelia_domain=authelia_domain,
+                client_id=client_id,
+                client_secret=secret,
+            ),
+            header=mas_config.AUTHELIA_CLIENT_SIDECAR_HEADER,
+        )
+        notes.append(
+            f"Wrote Authelia client sidecar ({authelia_sidecar}). "
+            "Re-run bash apply.sh in authelia-easy-deploy if Authelia is already deployed."
+        )
+    else:
+        redirect = mas_config.matrix_authelia_redirect_uri(matrix_domain, authelia_domain)
+        notes.append(
+            "No sibling Authelia checkout found. Register a confidential OIDC client on Authelia "
+            f"with redirect URI {redirect} and client_id {client_id}."
+        )
+    return notes
+
+
+def prepare_sso_config(ctx: ApplyContext, config: dict) -> list[str]:
+    """Assign Authelia sidecars (if needed) and merge them in memory for this apply."""
+    notes = provision_local_authelia_oidc(ctx, config)
+    mas_config.apply_engine_oidc_sidecar(config, oidc_provider_sidecar_path(ctx))
+    return notes
+
+
 def save_config(ctx: ApplyContext, config: dict) -> None:
     with ctx.config_file.open("w") as f:
         yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
@@ -2312,6 +2412,8 @@ def apply_configuration(
     if mas_config.ensure_sso_provider_ids(config):
         save_config(ctx, config)
         print("Assigned stable upstream SSO provider IDs in deploy.yaml")
+    for line in prepare_sso_config(ctx, config):
+        print(line)
     validate_config(config)
     derived = derive_values(config, server_ip=server_ip)
     mas_enabled = derived.get("MAS_ENABLED") == "true"

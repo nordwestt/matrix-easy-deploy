@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import shlex
 from pathlib import Path
 
@@ -251,6 +252,50 @@ def normalize_proxy_mode(value: str | None) -> str:
     return mode
 
 
+def read_authelia_domain(deploy_path: Path) -> str:
+    if not deploy_path.is_file():
+        return ""
+    with deploy_path.open() as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        return ""
+    return str((data.get("authelia") or {}).get("domain") or "").strip()
+
+
+def discover_local_authelia(matrix_root: Path) -> dict[str, str]:
+    """Find a sibling (or engine-exported) Authelia deploy.yaml and portal domain."""
+    candidates: list[Path] = []
+    env_deploy = str(os.environ.get("EASYDEPLOY_AUTHELIA_DEPLOY") or "").strip()
+    if env_deploy:
+        candidates.append(Path(env_deploy).expanduser())
+    candidates.append((matrix_root.parent / "authelia-easy-deploy" / "deploy.yaml").resolve())
+
+    seen: set[Path] = set()
+    for path in candidates:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        domain = read_authelia_domain(resolved)
+        if domain:
+            return {"domain": domain, "deploy": str(resolved)}
+
+    env_domain = str(os.environ.get("EASYDEPLOY_AUTHELIA_DOMAIN") or "").strip()
+    if env_domain:
+        return {"domain": env_domain, "deploy": env_deploy}
+    return {}
+
+
+def emit_local_authelia(matrix_root: Path) -> str:
+    found = discover_local_authelia(matrix_root)
+    domain = found.get("domain", "")
+    deploy = found.get("deploy", "")
+    return (
+        f"LOCAL_AUTHELIA_DOMAIN={shlex.quote(domain)}\n"
+        f"LOCAL_AUTHELIA_DEPLOY={shlex.quote(deploy)}\n"
+    )
+
+
 def set_proxy_mode(config: dict, proxy_mode: str) -> None:
     mode = normalize_proxy_mode(proxy_mode)
     proxy = config.get("proxy")
@@ -293,6 +338,7 @@ def update_sso_config(
     config: dict,
     enabled: bool,
     providers: list | None = None,
+    provider: str | None = None,
 ) -> None:
     features = config.setdefault("features", {})
     if not isinstance(features, dict):
@@ -309,6 +355,12 @@ def update_sso_config(
         sso["providers"] = providers
     elif "providers" not in sso:
         sso["providers"] = []
+    if provider is not None:
+        normalized = provider.strip().lower()
+        if normalized:
+            sso["provider"] = normalized
+        else:
+            sso.pop("provider", None)
 
 
 def update_backup_config(
@@ -489,6 +541,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     action.add_argument("--set-sso", action="store_true")
     action.add_argument("--set-backup-config", action="store_true")
     action.add_argument("--print-wizard-defaults", action="store_true")
+    action.add_argument("--print-local-authelia", action="store_true")
     action.add_argument("--print-module-defaults")
     action.add_argument("--print-backup-defaults", action="store_true")
 
@@ -508,6 +561,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--local-login-enabled")
     parser.add_argument("--sso-enabled")
     parser.add_argument("--sso-providers-json")
+    parser.add_argument("--sso-provider")
     parser.add_argument("--proxy-mode")
 
     parser.add_argument("--module-enabled")
@@ -531,6 +585,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     deploy_yaml = Path(args.deploy_yaml)
+    if args.print_local_authelia:
+        print(emit_local_authelia(deploy_yaml.expanduser().resolve().parent), end="")
+        return 0
     config = load_or_init(deploy_yaml)
 
     if args.print_wizard_defaults:
@@ -615,6 +672,7 @@ def main(argv: list[str] | None = None) -> int:
             config,
             enabled=to_bool(args.sso_enabled),
             providers=providers,
+            provider=args.sso_provider,
         )
         save(deploy_yaml, config)
         return 0
