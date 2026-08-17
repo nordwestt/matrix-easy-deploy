@@ -339,6 +339,7 @@ def update_sso_config(
     enabled: bool,
     providers: list | None = None,
     provider: str | None = None,
+    default_login: str | None = None,
 ) -> None:
     features = config.setdefault("features", {})
     if not isinstance(features, dict):
@@ -361,6 +362,12 @@ def update_sso_config(
             sso["provider"] = normalized
         else:
             sso.pop("provider", None)
+    if default_login is not None:
+        normalized = default_login.strip().lower()
+        if normalized:
+            sso["default_login"] = normalized
+        else:
+            sso.pop("default_login", None)
 
 
 def update_backup_config(
@@ -562,6 +569,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--sso-enabled")
     parser.add_argument("--sso-providers-json")
     parser.add_argument("--sso-provider")
+    parser.add_argument("--sso-default-login")
     parser.add_argument("--proxy-mode")
 
     parser.add_argument("--module-enabled")
@@ -673,6 +681,7 @@ def main(argv: list[str] | None = None) -> int:
             enabled=to_bool(args.sso_enabled),
             providers=providers,
             provider=args.sso_provider,
+            default_login=args.sso_default_login,
         )
         save(deploy_yaml, config)
         return 0

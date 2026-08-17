@@ -575,11 +575,14 @@ def validate_element_config(element: dict) -> None:
 
     sso_redirect_options = element.get("sso_redirect_options")
     if sso_redirect_options is not None:
-        if not isinstance(sso_redirect_options, dict):
-            raise ValueError("features.element.sso_redirect_options must be an object")
-        for key in ("immediate", "on_welcome_page", "on_login_page"):
-            if key in sso_redirect_options:
-                _require_bool(sso_redirect_options.get(key), f"features.element.sso_redirect_options.{key}")
+        if sso_redirect_options is False:
+            pass
+        elif not isinstance(sso_redirect_options, dict):
+            raise ValueError("features.element.sso_redirect_options must be an object or false")
+        else:
+            for key in ("immediate", "on_welcome_page", "on_login_page"):
+                if key in sso_redirect_options:
+                    _require_bool(sso_redirect_options.get(key), f"features.element.sso_redirect_options.{key}")
 
     integrations = element.get("integrations")
     if integrations is not None:
@@ -1637,10 +1640,8 @@ def merge_element_customizations(base: dict, element_cfg: dict) -> dict:
             if key in embedded_pages:
                 embedded_target[key] = embedded_pages[key]
 
-    sso_redirect_options = (
-        element_cfg.get("sso_redirect_options") if isinstance(element_cfg.get("sso_redirect_options"), dict) else None
-    )
-    if sso_redirect_options:
+    sso_redirect_options = element_cfg.get("sso_redirect_options")
+    if isinstance(sso_redirect_options, dict) and sso_redirect_options:
         redirect_target = merged.setdefault("sso_redirect_options", {})
         for key in ("immediate", "on_welcome_page", "on_login_page"):
             if key in sso_redirect_options:
@@ -1767,11 +1768,30 @@ def apply_calls_element_config(target: dict, config: dict) -> None:
         element_features["feature_ask_to_join"] = True
 
 
+def apply_sso_login_defaults(element_json: dict, config: dict) -> None:
+    """Send Element users straight to Authelia unless the operator asked for a chooser."""
+    features = config.get("features") if isinstance(config.get("features"), dict) else {}
+    element_cfg = features.get("element") if isinstance(features.get("element"), dict) else {}
+    explicit = element_cfg.get("sso_redirect_options") if "sso_redirect_options" in element_cfg else None
+    if explicit is False:
+        element_json.pop("sso_redirect_options", None)
+        return
+    if isinstance(explicit, dict) and explicit:
+        return
+    if mas_config.resolve_sso_default_login(config) != mas_config.SSO_DEFAULT_LOGIN_SSO:
+        return
+    element_json["sso_redirect_options"] = {
+        "on_welcome_page": True,
+        "on_login_page": True,
+    }
+
+
 def build_element_config(config: dict) -> dict:
     features = config.get("features", {}) if isinstance(config.get("features", {}), dict) else {}
     element_cfg = features.get("element", {}) if isinstance(features.get("element"), dict) else {}
     merged = merge_element_customizations(build_default_element_config(config), element_cfg)
     apply_calls_element_config(merged, config)
+    apply_sso_login_defaults(merged, config)
     return merged
 
 

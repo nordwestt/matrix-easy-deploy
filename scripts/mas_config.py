@@ -93,6 +93,34 @@ def is_authelia_sso_provider(provider: dict | None) -> bool:
     return "authelia" in issuer
 
 
+SSO_DEFAULT_LOGIN_SSO = "sso"
+SSO_DEFAULT_LOGIN_CHOOSER = "chooser"
+
+
+def normalize_sso_default_login(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"sso", "idp", "authelia"}:
+        return SSO_DEFAULT_LOGIN_SSO
+    if raw in {"chooser", "both", "local", "password"}:
+        return SSO_DEFAULT_LOGIN_CHOOSER
+    raise ValueError("features.sso.default_login must be 'sso' or 'chooser'")
+
+
+def resolve_sso_default_login(config: dict) -> str:
+    """Element login: Authelia defaults to SSO-first; other IdPs keep the chooser."""
+    features = config.get("features") if isinstance(config.get("features"), dict) else {}
+    sso = features.get("sso") if isinstance(features.get("sso"), dict) else {}
+    if not bool(sso.get("enabled")):
+        return SSO_DEFAULT_LOGIN_CHOOSER
+    providers = sso.get("providers") if isinstance(sso.get("providers"), list) else []
+    if "default_login" in sso and sso.get("default_login") not in (None, ""):
+        return normalize_sso_default_login(sso.get("default_login"))
+    provider = str(sso.get("provider") or "").strip().lower()
+    if provider == "authelia" or any(is_authelia_sso_provider(item) for item in providers):
+        return SSO_DEFAULT_LOGIN_SSO
+    return SSO_DEFAULT_LOGIN_CHOOSER
+
+
 MATRIX_OIDC_SIDECAR_HEADER = (
     "# Generated for Authelia OIDC. Secrets stay here, not in deploy.yaml.\n"
     "# Set features.sso.managed: false to ignore.\n"
@@ -481,6 +509,8 @@ def validate_sso_config(config: dict) -> None:
             raise ValueError("features.sso.enabled must be true/false")
         if "providers" in sso and not isinstance(sso.get("providers"), list):
             raise ValueError("features.sso.providers must be a list")
+        if sso.get("default_login") not in (None, ""):
+            normalize_sso_default_login(sso.get("default_login"))
 
     if "mas" in features:
         raise ValueError("features.mas is no longer supported; use features.sso instead")

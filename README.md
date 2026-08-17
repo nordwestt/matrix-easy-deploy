@@ -733,6 +733,16 @@ You can configure multiple providers in one run (for example Google + Okta + Aut
 
 When Authelia is already deployed next to this kit (or the engine wizard exported it), the Matrix wizard asks **Use Authelia at https://auth… as Matrix SSO?** and fills issuer, client ID, and secret for you. Re-apply Authelia afterwards so it picks up the generated client sidecar. Independent Matrix installs with no Authelia sibling keep the Google/Entra prompts.
 
+Element then sends users **straight to Authelia** (SSO-first). To show local password login alongside Authelia again:
+
+```yaml
+features:
+  sso:
+    default_login: chooser
+```
+
+(`features.element.sso_redirect_options: false` also disables the auto-redirect.)
+
 When creating the OIDC app in your identity provider, set the redirect/callback URL to:
 
 ```text

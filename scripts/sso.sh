@@ -81,6 +81,7 @@ gather_sso_config() {
     local LOCAL_AUTHELIA_DOMAIN="" LOCAL_AUTHELIA_DEPLOY=""
     local use_local_authelia="n"
     SSO_PROVIDER=""
+    SSO_DEFAULT_LOGIN=""
     local deploy_yaml="${DEPLOY_YAML:-${SCRIPT_DIR}/deploy.yaml}"
     eval "$(python3 "${SCRIPT_DIR}/scripts/config_edit.py" --deploy-yaml "$deploy_yaml" --print-local-authelia)"
     if [[ -n "${LOCAL_AUTHELIA_DOMAIN:-}" ]]; then
@@ -100,6 +101,7 @@ gather_sso_config() {
         fi
         ENABLE_SSO="true"
         SSO_PROVIDER="authelia"
+        SSO_DEFAULT_LOGIN="sso"
         OIDC_PROVIDERS_JSON="[]"
         OIDC_PROVIDER_COUNT=1
         OIDC_PROVIDER_NAMES="Authelia"
@@ -122,6 +124,7 @@ gather_sso_config() {
             OIDC_PROVIDER_COUNT="0"
             OIDC_PROVIDER_NAMES=""
             SSO_PROVIDER=""
+            SSO_DEFAULT_LOGIN=""
             return 0
         fi
 

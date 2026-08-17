@@ -377,10 +377,12 @@ class ConfigEditTests(unittest.TestCase):
 
     def test_update_sso_config_sets_authelia_provider(self):
         config = config_edit.load_or_init(self.deploy_yaml)
-        config_edit.update_sso_config(config, enabled=True, providers=[], provider="authelia")
+        config_edit.update_sso_config(
+            config, enabled=True, providers=[], provider="authelia", default_login="sso"
+        )
         self.assertTrue(config["features"]["sso"]["enabled"])
         self.assertEqual(config["features"]["sso"]["provider"], "authelia")
-        self.assertEqual(config["features"]["sso"]["providers"], [])
+        self.assertEqual(config["features"]["sso"]["default_login"], "sso")
         config_edit.update_sso_config(config, enabled=True, providers=[], provider="")
         self.assertNotIn("provider", config["features"]["sso"])
 

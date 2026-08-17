@@ -122,6 +122,35 @@ class MasConfigUpstreamOauth2Tests(unittest.TestCase):
             mas_config.stable_provider_ulid("Authelia", "https://auth.test.example"),
         )
 
+    def test_resolve_sso_default_login_authelia_vs_chooser(self):
+        authelia = {
+            "features": {
+                "sso": {
+                    "enabled": True,
+                    "provider": "authelia",
+                    "providers": [{"name": "Authelia", "issuer": "https://auth.test.example", "client_id": "matrix"}],
+                }
+            }
+        }
+        google = {
+            "features": {
+                "sso": {
+                    "enabled": True,
+                    "providers": [
+                        {
+                            "name": "Google",
+                            "issuer": "https://accounts.google.com/",
+                            "client_id": "g",
+                        }
+                    ],
+                }
+            }
+        }
+        self.assertEqual(mas_config.resolve_sso_default_login(authelia), "sso")
+        self.assertEqual(mas_config.resolve_sso_default_login(google), "chooser")
+        authelia["features"]["sso"]["default_login"] = "chooser"
+        self.assertEqual(mas_config.resolve_sso_default_login(authelia), "chooser")
+
     def test_build_mas_upstream_oauth2_yaml_uses_string_scope(self):
         providers = [
             {

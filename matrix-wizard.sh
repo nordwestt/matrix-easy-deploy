@@ -121,6 +121,7 @@ edit_deploy_config() {
         LOCAL_LOGIN_ENABLED="true"
         ENABLE_SSO="false"
         SSO_PROVIDER=""
+        SSO_DEFAULT_LOGIN=""
         OIDC_PROVIDERS_JSON="[]"
         OIDC_PROVIDER_COUNT="0"
         OIDC_PROVIDER_NAMES=""
@@ -300,7 +301,8 @@ edit_deploy_config() {
             --set-sso \
             --sso-enabled "$ENABLE_SSO" \
             --sso-providers-json "$OIDC_PROVIDERS_JSON" \
-            --sso-provider "${SSO_PROVIDER:-}"
+            --sso-provider "${SSO_PROVIDER:-}" \
+            --sso-default-login "${SSO_DEFAULT_LOGIN:-}"
     fi
     success "Configuration saved to deploy.yaml"
 

@@ -717,6 +717,63 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(merged["element_call"]["url"], "https://call.element.io")
         self.assertTrue(merged["features"]["feature_group_calls"])
 
+    def test_build_element_config_authelia_defaults_to_sso_redirect(self):
+        cfg = self.sample_config()
+        cfg["features"]["sso"] = {
+            "enabled": True,
+            "provider": "authelia",
+            "providers": [
+                {
+                    "id": "01HFVBY12TMNTYTBV8W921M5FA",
+                    "name": "Authelia",
+                    "issuer": "https://auth.example.com",
+                    "client_id": "matrix",
+                    "client_secret": "secret",
+                }
+            ],
+        }
+        merged = apply.build_element_config(cfg)
+        self.assertEqual(
+            merged["sso_redirect_options"],
+            {"on_welcome_page": True, "on_login_page": True},
+        )
+
+    def test_build_element_config_authelia_chooser_disables_sso_redirect(self):
+        cfg = self.sample_config()
+        cfg["features"]["sso"] = {
+            "enabled": True,
+            "provider": "authelia",
+            "default_login": "chooser",
+            "providers": [
+                {
+                    "id": "01HFVBY12TMNTYTBV8W921M5FA",
+                    "name": "Authelia",
+                    "issuer": "https://auth.example.com",
+                    "client_id": "matrix",
+                    "client_secret": "secret",
+                }
+            ],
+        }
+        merged = apply.build_element_config(cfg)
+        self.assertNotIn("sso_redirect_options", merged)
+
+    def test_build_element_config_google_sso_keeps_login_chooser(self):
+        cfg = self.sample_config()
+        cfg["features"]["sso"] = {
+            "enabled": True,
+            "providers": [
+                {
+                    "id": "01HFVBY12TMNTYTBV8W921M5FA",
+                    "name": "Google",
+                    "issuer": "https://accounts.google.com/",
+                    "client_id": "g",
+                    "client_secret": "s",
+                }
+            ],
+        }
+        merged = apply.build_element_config(cfg)
+        self.assertNotIn("sso_redirect_options", merged)
+
     def test_build_guest_call_share_url_matches_element_web_format(self):
         url = apply.build_guest_call_share_url(
             "call.example.com",
