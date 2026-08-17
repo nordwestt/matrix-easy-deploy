@@ -4,6 +4,13 @@ matrix:
   admin_username: admin
   # Homeserver software: synapse (default) or tuwunel
   server_implementation: synapse
+proxy:
+  type: caddy
+  # standalone — this kit runs Caddy on :443 (single-service VPS)
+  # integrate — join easydeploy-net; easydeploy-engine owns Caddy (multi-service VPS)
+  mode: standalone
+  integrate:
+    network: easydeploy-net
 features:
   registration_enabled: false
   federation_enabled: true

@@ -4,8 +4,12 @@
 setup_docker() {
     info "Setting up Docker infrastructure…"
 
+    load_runtime_desired_state "${SCRIPT_DIR}"
     ensure_docker_network "caddy_net"
     ensure_docker_volume "caddy_data"
+    if [[ "${PROXY_MODE:-standalone}" == "integrate" ]]; then
+        ensure_docker_network "${INTEGRATE_NETWORK:-easydeploy-net}"
+    fi
 
     local synapse_data_dir="${SCRIPT_DIR}/modules/core/synapse_data"
     if [[ ! -d "$synapse_data_dir" ]]; then
@@ -56,13 +60,19 @@ start_services() {
         _element_label=" + Element"
     fi
 
+    load_runtime_desired_state "${SCRIPT_DIR}"
     reset_core_postgres_volume_if_present
 
     echo
-    info "Starting Caddy…"
-    build_caddy_compose_args "${SCRIPT_DIR}"
-    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d --pull always)
-    success "Caddy is up."
+    if [[ "${PROXY_MODE:-standalone}" == "integrate" ]]; then
+        info "Skipping local Caddy (proxy.mode: integrate — easydeploy-engine owns :443)."
+        stop_standalone_matrix_caddy
+    else
+        info "Starting Caddy…"
+        build_caddy_compose_args "${SCRIPT_DIR}"
+        (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d --pull always)
+        success "Caddy is up."
+    fi
 
     echo
     local _hs_label="Synapse"
@@ -89,7 +99,8 @@ start_services() {
         source "${_med_scripts_dir}/module_common.sh"
         bootstrap_mas_database "${SCRIPT_DIR}"
         info "Starting Matrix Authentication Service (MAS)…"
-        (cd "${SCRIPT_DIR}/modules/mas" && "${DOCKER_COMPOSE[@]}" up -d --pull always)
+        build_mas_compose_args "${SCRIPT_DIR}"
+        (cd "${SCRIPT_DIR}/modules/mas" && "${DOCKER_COMPOSE[@]}" "${MAS_COMPOSE_ARGS[@]}" up -d --pull always)
         success "MAS started."
     fi
 

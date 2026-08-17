@@ -70,6 +70,11 @@ def load_or_init(path: Path) -> dict:
                     "keep_yearly": 0,
                 },
             },
+            "proxy": {
+                "type": "caddy",
+                "mode": "standalone",
+                "integrate": {"network": "easydeploy-net"},
+            },
         }
 
     with path.open() as f:
@@ -160,6 +165,7 @@ def update_core_config(
     guest_access_enabled: bool | None = None,
     guest_call_domain: str | None = None,
     guest_server_name: str | None = None,
+    proxy_mode: str | None = None,
 ) -> None:
     matrix = config.setdefault("matrix", {})
     if not isinstance(matrix, dict):
@@ -169,6 +175,9 @@ def update_core_config(
     matrix["server_name"] = server_name
     matrix["admin_username"] = admin_username
     matrix["server_implementation"] = normalize_server_implementation(server_implementation)
+
+    if proxy_mode is not None:
+        set_proxy_mode(config, proxy_mode)
 
     features = config.setdefault("features", {})
     if not isinstance(features, dict):
@@ -233,6 +242,28 @@ def update_core_config(
         guest_access["server_name"] = f"guest.{base_domain}"
 
     guest_access.pop("matrix_domain", None)
+
+
+def normalize_proxy_mode(value: str | None) -> str:
+    mode = str(value or "standalone").strip().lower()
+    if mode not in {"standalone", "integrate"}:
+        raise ValueError("proxy.mode must be 'standalone' or 'integrate'")
+    return mode
+
+
+def set_proxy_mode(config: dict, proxy_mode: str) -> None:
+    mode = normalize_proxy_mode(proxy_mode)
+    proxy = config.get("proxy")
+    if not isinstance(proxy, dict):
+        proxy = {"type": "caddy"}
+        config["proxy"] = proxy
+    proxy.setdefault("type", "caddy")
+    proxy["mode"] = mode
+    integrate = proxy.get("integrate")
+    if not isinstance(integrate, dict):
+        proxy["integrate"] = {"network": "easydeploy-net"}
+    else:
+        integrate.setdefault("network", "easydeploy-net")
 
 
 def oidc_json_to_deploy_providers(providers_json: str) -> list:
@@ -386,6 +417,7 @@ def emit_wizard_defaults(config: dict) -> str:
         "config_sso_default": shell_bool_default(
             to_bool(sso.get("enabled", False)), yes_default="y", no_default="n"
         ),
+        "config_proxy_mode": str((config.get("proxy") or {}).get("mode") or "standalone"),
     }
 
     lines = []
@@ -476,6 +508,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--local-login-enabled")
     parser.add_argument("--sso-enabled")
     parser.add_argument("--sso-providers-json")
+    parser.add_argument("--proxy-mode")
 
     parser.add_argument("--module-enabled")
     parser.add_argument("--module-admin-username")
@@ -567,6 +600,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             guest_call_domain=args.guest_call_domain,
             guest_server_name=args.guest_server_name,
+            proxy_mode=args.proxy_mode,
         )
         save(deploy_yaml, config)
         return 0

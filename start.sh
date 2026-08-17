@@ -6,27 +6,34 @@ source "${SCRIPT_DIR}/scripts/lib.sh"
 source "${SCRIPT_DIR}/scripts/module_common.sh"
 IFS=' ' read -ra DOCKER_COMPOSE <<< "$(docker_compose_cmd)"
 
-# Ensure external Docker resources exist for direct apply/start workflows.
-ensure_docker_network "caddy_net"
-ensure_docker_volume "caddy_data"
-ensure_homeserver_data_permissions "${SCRIPT_DIR}"
-
-info "Starting Caddy…"
-build_caddy_compose_args "${SCRIPT_DIR}"
-(cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d)
-
-info "Starting core services…"
 # Load .env if it exists so POSTGRES_PASSWORD and INSTALL_ELEMENT are available
 INSTALL_ELEMENT="true"  # default: assume Element is present if .env is missing
 MAS_ENABLED="false"
 HOOKSHOT_ENABLED="false"
 WHATSAPP_BRIDGE_ENABLED="false"
 SLACK_BRIDGE_ENABLED="false"
+PROXY_MODE="standalone"
+INTEGRATE_NETWORK="easydeploy-net"
 if [[ -f "${SCRIPT_DIR}/.env" ]]; then
     load_deploy_env "${SCRIPT_DIR}/.env"
 fi
 
 load_runtime_desired_state "${SCRIPT_DIR}"
+
+# Ensure external Docker resources exist for direct apply/start workflows.
+ensure_docker_network "caddy_net"
+ensure_docker_volume "caddy_data"
+if [[ "${PROXY_MODE}" == "integrate" ]]; then
+    ensure_docker_network "${INTEGRATE_NETWORK:-easydeploy-net}"
+    stop_standalone_matrix_caddy
+else
+    info "Starting Caddy…"
+    build_caddy_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/caddy" && "${DOCKER_COMPOSE[@]}" "${CADDY_COMPOSE_ARGS[@]}" up -d)
+fi
+ensure_homeserver_data_permissions "${SCRIPT_DIR}"
+
+info "Starting core services…"
 
 build_core_compose_start_profiles
 build_core_compose_args "${SCRIPT_DIR}"
@@ -35,7 +42,8 @@ build_core_compose_args "${SCRIPT_DIR}"
 if [[ "${MAS_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/mas/config.yaml" ]]; then
     bootstrap_mas_database "${SCRIPT_DIR}"
     info "Starting Matrix Authentication Service (MAS)…"
-    (cd "${SCRIPT_DIR}/modules/mas" && "${DOCKER_COMPOSE[@]}" up -d)
+    build_mas_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/mas" && "${DOCKER_COMPOSE[@]}" "${MAS_COMPOSE_ARGS[@]}" up -d)
 elif [[ "${MAS_ENABLED:-false}" == "true" ]]; then
     warn "MAS is enabled in deploy.yaml but config file is missing. Run 'bash apply.sh' first."
 fi
@@ -47,7 +55,8 @@ build_calls_compose_args "${SCRIPT_DIR}"
 # Start Hookshot if it was installed as a module
 if [[ "${HOOKSHOT_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/hookshot/hookshot/config.yml" ]]; then
     info "Starting Hookshot…"
-    (cd "${SCRIPT_DIR}/modules/hookshot" && "${DOCKER_COMPOSE[@]}" up -d)
+    build_hookshot_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/hookshot" && "${DOCKER_COMPOSE[@]}" "${HOOKSHOT_COMPOSE_ARGS[@]}" up -d)
 elif [[ "${HOOKSHOT_ENABLED:-false}" == "true" ]]; then
     warn "Hookshot is enabled in deploy.yaml but config file is missing. Run 'bash apply.sh' and module setup first."
 fi
@@ -55,7 +64,8 @@ fi
 # Start WhatsApp bridge if it was installed as a module
 if [[ "${WHATSAPP_BRIDGE_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/whatsapp-bridge/whatsapp/config.yaml" ]]; then
     info "Starting WhatsApp bridge…"
-    (cd "${SCRIPT_DIR}/modules/whatsapp-bridge" && "${DOCKER_COMPOSE[@]}" up -d)
+    build_whatsapp_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/whatsapp-bridge" && "${DOCKER_COMPOSE[@]}" "${WHATSAPP_COMPOSE_ARGS[@]}" up -d)
 elif [[ "${WHATSAPP_BRIDGE_ENABLED:-false}" == "true" ]]; then
     warn "WhatsApp bridge is enabled in deploy.yaml but config file is missing. Run module setup first."
 fi
@@ -63,7 +73,8 @@ fi
 # Start Slack bridge if it was installed as a module
 if [[ "${SLACK_BRIDGE_ENABLED:-false}" == "true" && -f "${SCRIPT_DIR}/modules/slack-bridge/slack/config.yaml" ]]; then
     info "Starting Slack bridge…"
-    (cd "${SCRIPT_DIR}/modules/slack-bridge" && "${DOCKER_COMPOSE[@]}" up -d)
+    build_slack_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/slack-bridge" && "${DOCKER_COMPOSE[@]}" "${SLACK_COMPOSE_ARGS[@]}" up -d)
 elif [[ "${SLACK_BRIDGE_ENABLED:-false}" == "true" ]]; then
     warn "Slack bridge is enabled in deploy.yaml but config file is missing. Run module setup first."
 fi

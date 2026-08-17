@@ -115,6 +115,41 @@ class ConfigEditTests(unittest.TestCase):
         self.assertTrue(updated["features"]["sso"]["enabled"])
         self.assertEqual(updated["features"]["sso"]["providers"][0]["name"], "Google")
 
+    def test_set_core_writes_proxy_mode(self):
+        rc = config_edit.main(
+            [
+                "--deploy-yaml",
+                str(self.deploy_yaml),
+                "--set-core",
+                "--matrix-domain",
+                "matrix.example.com",
+                "--server-name",
+                "example.com",
+                "--admin-username",
+                "admin",
+                "--registration-enabled",
+                "false",
+                "--federation-enabled",
+                "true",
+                "--install-element",
+                "true",
+                "--element-domain",
+                "element.example.com",
+                "--calls-enabled",
+                "true",
+                "--livekit-domain",
+                "livekit.example.com",
+                "--server-implementation",
+                "synapse",
+                "--proxy-mode",
+                "integrate",
+            ]
+        )
+        self.assertEqual(rc, 0)
+        updated = yaml.safe_load(self.deploy_yaml.read_text())
+        self.assertEqual(updated["proxy"]["mode"], "integrate")
+        self.assertEqual(updated["proxy"]["integrate"]["network"], "easydeploy-net")
+
     def test_set_module_config_updates_whatsapp_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             deploy_yaml = Path(tmp) / "deploy.yaml"

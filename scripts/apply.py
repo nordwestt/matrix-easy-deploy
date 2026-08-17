@@ -173,6 +173,181 @@ class ApplyContext:
         self.state_dir = project_root / ".matrix-easy-deploy"
         self.env_file = project_root / ".env"
 
+    @property
+    def integration_dir(self) -> Path:
+        return self.state_dir / "integration"
+
+    @property
+    def integration_caddy_fragment(self) -> Path:
+        return self.integration_dir / "caddy.caddy"
+
+    @property
+    def engine_caddy_overlay(self) -> Path:
+        return self.integration_dir / "engine-caddy.yml"
+
+    @property
+    def integrate_compose_dir(self) -> Path:
+        return self.state_dir / "compose"
+
+
+DEFAULT_INTEGRATE_NETWORK = "easydeploy-net"
+
+
+def proxy_mode(config: dict) -> str:
+    mode = str((config.get("proxy") or {}).get("mode") or "standalone").strip().lower()
+    if mode not in {"standalone", "integrate"}:
+        raise ValueError("proxy.mode must be 'standalone' or 'integrate'")
+    return mode
+
+
+def integrate_network_name(config: dict) -> str:
+    integrate = (config.get("proxy") or {}).get("integrate") or {}
+    if not isinstance(integrate, dict):
+        return DEFAULT_INTEGRATE_NETWORK
+    name = str(integrate.get("network") or DEFAULT_INTEGRATE_NETWORK).strip()
+    return name or DEFAULT_INTEGRATE_NETWORK
+
+
+def guest_caddy_alias_hosts(config: dict, derived: dict) -> list[str]:
+    if derived.get("GUEST_ACCESS_ENABLED") != "true":
+        return []
+    matrix = config.get("matrix") if isinstance(config.get("matrix"), dict) else {}
+    hosts: list[str] = []
+    for host in (
+        derived.get("GUEST_SERVER_NAME", ""),
+        derived.get("SERVER_NAME", ""),
+        str(matrix.get("domain") or ""),
+    ):
+        value = str(host or "").strip()
+        if value and value not in hosts:
+            hosts.append(value)
+    return hosts
+
+
+def render_integration_fragment(ctx: ApplyContext) -> None:
+    caddyfile = ctx.project_root / "caddy" / "Caddyfile"
+    if not caddyfile.is_file():
+        raise FileNotFoundError(f"Missing Caddyfile at {caddyfile} (needed for integrate fragment)")
+    ctx.integration_dir.mkdir(parents=True, exist_ok=True)
+    body = caddyfile.read_text().strip()
+    ctx.integration_caddy_fragment.write_text(f"# matrix-easy-deploy\n{body}\n")
+
+
+def render_engine_caddy_overlay(ctx: ApplyContext, config: dict, derived: dict) -> None:
+    """Attach easydeploy_caddy to caddy_net (guest aliases + LiveKit host-gateway)."""
+    aliases = guest_caddy_alias_hosts(config, derived)
+    caddy_net: dict[str, Any] = {}
+    if aliases:
+        caddy_net["aliases"] = aliases
+    network = integrate_network_name(config)
+    overlay = {
+        "services": {
+            "caddy": {
+                "extra_hosts": ["host.docker.internal:host-gateway"],
+                "networks": {
+                    network: {},
+                    "caddy_net": caddy_net,
+                },
+            }
+        },
+        "networks": {
+            "caddy_net": {"external": True, "name": "caddy_net"},
+            network: {"external": True, "name": network},
+        },
+    }
+    ctx.integration_dir.mkdir(parents=True, exist_ok=True)
+    with ctx.engine_caddy_overlay.open("w") as handle:
+        yaml.safe_dump(overlay, handle, default_flow_style=False, sort_keys=False)
+
+
+def _network_overlay(services: dict[str, Any], network: str) -> dict[str, Any]:
+    return {
+        "services": services,
+        "networks": {network: {"external": True, "name": network}},
+    }
+
+
+def render_integrate_compose_overlays(ctx: ApplyContext, config: dict) -> None:
+    """Join public Matrix backends to easydeploy-net; keep caddy_net for the internal mesh."""
+    network = integrate_network_name(config)
+    compose_dir = ctx.integrate_compose_dir
+    compose_dir.mkdir(parents=True, exist_ok=True)
+
+    dual = [network, "caddy_net"]
+    dual_internal = ["matrix_internal", "caddy_net", network]
+
+    core = _network_overlay(
+        {
+            "redis": {"networks": list(dual_internal)},
+            "synapse": {"networks": list(dual_internal)},
+            "tuwunel": {"networks": list(dual_internal)},
+            "element": {"networks": list(dual)},
+        },
+        network,
+    )
+    mas = {
+        "services": {
+            "mas": {
+                "networks": {
+                    "matrix_internal": {"aliases": ["matrix-mas"]},
+                    "caddy_net": {"aliases": ["matrix-mas"]},
+                    network: {"aliases": ["matrix-mas"]},
+                }
+            }
+        },
+        "networks": {network: {"external": True, "name": network}},
+    }
+    calls = _network_overlay(
+        {
+            "lk-jwt-service": {"networks": list(dual)},
+            "guest-tuwunel": {"networks": list(dual)},
+            "element-call": {"networks": list(dual)},
+        },
+        network,
+    )
+    hookshot = _network_overlay({"hookshot": {"networks": list(dual)}}, network)
+    whatsapp = _network_overlay(
+        {"mautrix-whatsapp": {"networks": ["caddy_net", "matrix_internal", network]}},
+        network,
+    )
+    slack = _network_overlay(
+        {"mautrix-slack": {"networks": ["caddy_net", "matrix_internal", network]}},
+        network,
+    )
+
+    dumps = {
+        "core.yml": core,
+        "mas.yml": mas,
+        "calls.yml": calls,
+        "hookshot.yml": hookshot,
+        "whatsapp.yml": whatsapp,
+        "slack.yml": slack,
+    }
+    for name, payload in dumps.items():
+        with (compose_dir / name).open("w") as handle:
+            yaml.safe_dump(payload, handle, default_flow_style=False, sort_keys=False)
+
+
+def clear_integrate_artifacts(ctx: ApplyContext) -> None:
+    for path in (ctx.integration_caddy_fragment, ctx.engine_caddy_overlay):
+        if path.is_file():
+            path.unlink()
+    compose_dir = ctx.integrate_compose_dir
+    if compose_dir.is_dir():
+        for child in compose_dir.glob("*.yml"):
+            child.unlink()
+
+
+def reconcile_proxy_integration(ctx: ApplyContext, config: dict, derived: dict) -> None:
+    if proxy_mode(config) != "integrate":
+        clear_integrate_artifacts(ctx)
+        return
+    render_integration_fragment(ctx)
+    render_engine_caddy_overlay(ctx, config, derived)
+    render_integrate_compose_overlays(ctx, config)
+    print(f"Proxy mode: integrate (Caddy fragment: {ctx.integration_caddy_fragment})")
+    print("Run easydeploy-engine apply.sh after enabling Matrix in engine.yaml.")
+
 
 def load_env_map(env_file: Path) -> dict[str, str]:
     if not env_file.exists():
@@ -898,6 +1073,8 @@ def validate_config(config: dict) -> None:
             if "enabled" in value and not isinstance(value.get("enabled"), bool):
                 raise ValueError(f"modules.{key}.enabled must be true/false")
 
+    proxy_mode(config)
+
     if isinstance(backup, dict):
         enabled = backup.get("enabled", False)
         if "enabled" in backup and not isinstance(enabled, bool):
@@ -1220,6 +1397,8 @@ def build_env_vars(config: dict, derived: dict, state_secrets: dict) -> dict:
         "MATRIX_DOMAIN": config["matrix"]["domain"],
         "SERVER_NAME": derived["SERVER_NAME"],
         "ADMIN_USERNAME": config["matrix"]["admin_username"],
+        "PROXY_MODE": proxy_mode(config),
+        "INTEGRATE_NETWORK": integrate_network_name(config),
     }
 
     modules = config.get("modules", {}) if isinstance(config.get("modules", {}), dict) else {}
@@ -2151,6 +2330,7 @@ def apply_configuration(
         reconcile_mas_bootstrap(ctx, config, env_vars)
     reconcile_bridge_appservices(ctx, config)
     reconcile_hookshot_caddy(ctx, config, derived)
+    reconcile_proxy_integration(ctx, config, derived)
     schedule_status = backup_schedule.reconcile(ctx.project_root, config)
     if schedule_status:
         print(schedule_status)
@@ -2191,7 +2371,13 @@ def wait_for_homeserver(ctx: ApplyContext, *, after_restart: bool = False) -> No
     url = f"https://{matrix_domain}/_matrix/client/versions"
     max_attempts = 30 if after_restart else 6
     interval_sec = 5
-    print(f"Auto-join rooms: waiting for homeserver to become ready…")
+    print("Auto-join rooms: waiting for homeserver to become ready…")
+    mode = env.get("PROXY_MODE", "standalone").strip().lower()
+    container = env.get("HOMESERVER_CONTAINER", "matrix_synapse").strip() or "matrix_synapse"
+    if ctx.config_file.is_file():
+        config = load_config(ctx)
+        mode = proxy_mode(config)
+        container = homeserver.get_spec(config).container_name
     for attempt in range(1, max_attempts + 1):
         try:
             req = urllib.request.Request(url, method="GET")
@@ -2205,6 +2391,16 @@ def wait_for_homeserver(ctx: ApplyContext, *, after_restart: bool = False) -> No
                 return
         except Exception:
             pass
+
+        if mode == "integrate":
+            inspect = subprocess.run(
+                ["docker", "inspect", "--format", "{{.State.Health.Status}}", container],
+                capture_output=True,
+                text=True,
+            )
+            if inspect.stdout.strip() == "healthy":
+                print("Auto-join rooms: homeserver is ready (internal health; shared Caddy may still be starting).")
+                return
 
         if attempt >= max_attempts:
             raise RuntimeError(

@@ -531,6 +531,50 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("SERVER_IMPLEMENTATION=synapse", env_text)
         self.assertIn("HOMESERVER_UPSTREAM=matrix_synapse:8008", env_text)
 
+    def test_apply_configuration_integrate_writes_caddy_fragment(self):
+        cfg = self.sample_config()
+        cfg["proxy"] = {
+            "type": "caddy",
+            "mode": "integrate",
+            "integrate": {"network": "easydeploy-net"},
+        }
+        self.write_config(cfg)
+        ctx = apply.ApplyContext(self.root)
+
+        apply.apply_configuration(ctx, server_ip="9.8.7.6", reconcile_modules=False)
+
+        fragment = ctx.integration_caddy_fragment
+        self.assertTrue(fragment.is_file())
+        text = fragment.read_text()
+        self.assertIn("# matrix-easy-deploy", text)
+        self.assertIn("matrix.example.com", text)
+        self.assertIn("reverse_proxy matrix_synapse:8008", text)
+
+        overlay = yaml.safe_load(ctx.engine_caddy_overlay.read_text())
+        self.assertIn("host.docker.internal:host-gateway", overlay["services"]["caddy"]["extra_hosts"])
+        self.assertIn("caddy_net", overlay["services"]["caddy"]["networks"])
+        self.assertIn("easydeploy-net", overlay["services"]["caddy"]["networks"])
+
+        core = yaml.safe_load((ctx.integrate_compose_dir / "core.yml").read_text())
+        self.assertIn("easydeploy-net", core["services"]["synapse"]["networks"])
+        self.assertIn("easydeploy-net", core["networks"])
+
+        env_text = (self.root / ".env").read_text()
+        self.assertIn("PROXY_MODE=integrate", env_text)
+
+    def test_apply_configuration_standalone_clears_integrate_artifacts(self):
+        ctx = apply.ApplyContext(self.root)
+        ctx.integration_dir.mkdir(parents=True)
+        ctx.integration_caddy_fragment.write_text("stale\n")
+        ctx.integrate_compose_dir.mkdir(parents=True)
+        (ctx.integrate_compose_dir / "core.yml").write_text("stale\n")
+
+        self.write_config(self.sample_config())
+        apply.apply_configuration(ctx, server_ip="9.8.7.6", reconcile_modules=False)
+
+        self.assertFalse(ctx.integration_caddy_fragment.exists())
+        self.assertFalse((ctx.integrate_compose_dir / "core.yml").exists())
+
     def test_apply_configuration_renders_tuwunel(self):
         cfg = self.sample_config()
         cfg["matrix"]["server_implementation"] = "tuwunel"

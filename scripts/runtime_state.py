@@ -80,7 +80,24 @@ def resolve_runtime_state(project_root: Path) -> dict[str, str]:
         "SERVER_IMPLEMENTATION": server_implementation,
         "HOMESERVER_COMPOSE_PROFILE": compose_profile,
         "HOMESERVER_CONTAINER": container,
+        "PROXY_MODE": _proxy_mode(deploy),
+        "INTEGRATE_NETWORK": _integrate_network(deploy),
     }
+
+
+def _proxy_mode(deploy: dict) -> str:
+    proxy = _as_dict(deploy.get("proxy"))
+    mode = str(proxy.get("mode") or "standalone").strip().lower()
+    if mode not in {"standalone", "integrate"}:
+        return "standalone"
+    return mode
+
+
+def _integrate_network(deploy: dict) -> str:
+    proxy = _as_dict(deploy.get("proxy"))
+    integrate = _as_dict(proxy.get("integrate"))
+    name = str(integrate.get("network") or "easydeploy-net").strip()
+    return name or "easydeploy-net"
 
 
 def emit_shell(state: dict[str, str]) -> str:

@@ -19,7 +19,8 @@ load_runtime_desired_state "${SCRIPT_DIR}"
 # Stop MAS when it was previously installed
 if [[ -f "${SCRIPT_DIR}/modules/mas/config.yaml" ]]; then
     info "Stopping Matrix Authentication Service (MAS)…"
-    (cd "${SCRIPT_DIR}/modules/mas" && "${DOCKER_COMPOSE[@]}" down)
+    build_mas_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/mas" && "${DOCKER_COMPOSE[@]}" "${MAS_COMPOSE_ARGS[@]}" down)
 fi
 
 build_core_compose_stop_profiles
@@ -28,19 +29,22 @@ build_core_compose_args "${SCRIPT_DIR}"
 # Stop WhatsApp bridge when its module was previously installed
 if [[ -f "${SCRIPT_DIR}/modules/whatsapp-bridge/whatsapp/config.yaml" ]]; then
     info "Stopping WhatsApp bridge…"
-    (cd "${SCRIPT_DIR}/modules/whatsapp-bridge" && "${DOCKER_COMPOSE[@]}" down)
+    build_whatsapp_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/whatsapp-bridge" && "${DOCKER_COMPOSE[@]}" "${WHATSAPP_COMPOSE_ARGS[@]}" down)
 fi
 
 # Stop Slack bridge when its module was previously installed
 if [[ -f "${SCRIPT_DIR}/modules/slack-bridge/slack/config.yaml" ]]; then
     info "Stopping Slack bridge…"
-    (cd "${SCRIPT_DIR}/modules/slack-bridge" && "${DOCKER_COMPOSE[@]}" down)
+    build_slack_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/slack-bridge" && "${DOCKER_COMPOSE[@]}" "${SLACK_COMPOSE_ARGS[@]}" down)
 fi
 
 # Stop Hookshot when its module was previously installed
 if [[ -f "${SCRIPT_DIR}/modules/hookshot/hookshot/config.yml" ]]; then
     info "Stopping Hookshot…"
-    (cd "${SCRIPT_DIR}/modules/hookshot" && "${DOCKER_COMPOSE[@]}" down)
+    build_hookshot_compose_args "${SCRIPT_DIR}"
+    (cd "${SCRIPT_DIR}/modules/hookshot" && "${DOCKER_COMPOSE[@]}" "${HOOKSHOT_COMPOSE_ARGS[@]}" down)
 fi
 
 info "Stopping calls services (coturn + LiveKit)…"

@@ -268,6 +268,8 @@ update_caddy() {
     if docker ps --format '{{.Names}}' | grep -q '^caddy$'; then
         docker exec caddy caddy reload --config /etc/caddy/Caddyfile 2>&1 | sed 's/^/    /'
         success "Caddy reloaded."
+    elif docker ps --format '{{.Names}}' | grep -q '^easydeploy_caddy$'; then
+        warn "Hookshot is behind shared easydeploy_caddy. Re-run bash apply.sh in easydeploy-engine to pick up the Caddy fragment."
     else
         warn "Caddy container is not running. The new site block will be active on next start."
     fi
@@ -279,7 +281,8 @@ update_caddy() {
 start_services() {
     echo
     info "Starting Hookshot…"
-    (cd "$MODULE_DIR" && "${DOCKER_COMPOSE[@]}" up -d --pull always)
+    build_hookshot_compose_args "${PROJECT_ROOT}"
+    (cd "$MODULE_DIR" && "${DOCKER_COMPOSE[@]}" "${HOOKSHOT_COMPOSE_ARGS[@]}" up -d --pull always)
     success "Hookshot started."
 
     echo

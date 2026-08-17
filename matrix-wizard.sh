@@ -31,6 +31,8 @@ source "${SCRIPT_DIR}/scripts/sso.sh"
 IFS=' ' read -ra DOCKER_COMPOSE <<< "$(docker_compose_cmd)"
 DEPLOY_ENV="${SCRIPT_DIR}/.env"
 DEPLOY_YAML="${SCRIPT_DIR}/deploy.yaml"
+NO_APPLY=0
+PROXY_MODE="${EASYDEPLOY_PROXY_MODE:-}"
 
 edit_deploy_config() {
     echo
@@ -51,6 +53,7 @@ edit_deploy_config() {
     local config_local_login_default="y"
     local config_sso_default="n"
     local config_server_implementation="synapse"
+    local config_proxy_mode="standalone"
 
     if [[ -f "$DEPLOY_YAML" ]]; then
         info "Loading existing configuration from deploy.yaml"
@@ -192,6 +195,21 @@ edit_deploy_config() {
     fi
 
     echo
+    echo -e "  ${BOLD}Reverse proxy${RESET}"
+    if [[ -n "${PROXY_MODE}" ]]; then
+        PROXY_MODE="${PROXY_MODE,,}"
+        info "Proxy mode: ${PROXY_MODE} (set by easydeploy-engine)"
+    else
+        echo "  standalone — this kit runs Caddy on :443 (single-service VPS)"
+        echo "  integrate  — shared Caddy via easydeploy-engine (multi-service VPS)"
+        ask PROXY_MODE "Proxy mode: standalone or integrate" "${config_proxy_mode}"
+        PROXY_MODE="${PROXY_MODE,,}"
+    fi
+    if [[ "$PROXY_MODE" != "standalone" && "$PROXY_MODE" != "integrate" ]]; then
+        die "proxy mode must be 'standalone' or 'integrate'"
+    fi
+
+    echo
     echo -e "${BOLD}  Configuration summary${RESET}"
     echo -e "  ─────────────────────────────────────────────────────"
     echo -e "  Matrix domain   : ${CYAN}${MATRIX_DOMAIN}${RESET}"
@@ -229,6 +247,7 @@ edit_deploy_config() {
     else
         echo -e "  LiveKit (calls) : ${CYAN}disabled${RESET}"
     fi
+    echo -e "  Proxy mode      : ${CYAN}${PROXY_MODE}${RESET}"
     echo
     echo -e "  ${YELLOW}DNS check:${RESET} make sure these A records point to this server before proceeding:"
     echo -e "    ${CYAN}${MATRIX_DOMAIN}${RESET}  →  <this server's IP>"
@@ -271,7 +290,8 @@ edit_deploy_config() {
         --guest-access-enabled "$ENABLE_GUEST_ACCESS" \
         --guest-call-domain "$GUEST_CALL_DOMAIN" \
         --guest-server-name "$GUEST_SERVER_NAME" \
-        --local-login-enabled "$LOCAL_LOGIN_ENABLED"
+        --local-login-enabled "$LOCAL_LOGIN_ENABLED" \
+        --proxy-mode "$PROXY_MODE"
     if [[ "$SERVER_IMPLEMENTATION" == "synapse" ]]; then
         python3 "${SCRIPT_DIR}/scripts/config_edit.py" \
             --deploy-yaml "$DEPLOY_YAML" \
@@ -280,6 +300,10 @@ edit_deploy_config() {
             --sso-providers-json "$OIDC_PROVIDERS_JSON"
     fi
     success "Configuration saved to deploy.yaml"
+
+    if [[ "${NO_APPLY}" == "1" ]]; then
+        return 0
+    fi
 
     echo
     ask_yn _proceed_deploy "Proceed to deployment?" "y"
@@ -300,6 +324,11 @@ run_full_setup() {
     echo -e "${BOLD}  Step 1 of 5 — Configuration${RESET}"
     if ! edit_deploy_config; then
         return
+    fi
+
+    if [[ "${NO_APPLY}" == "1" ]]; then
+        info "Skipping apply (--no-apply / --from-engine). easydeploy-engine will apply."
+        return 0
     fi
 
     echo
@@ -802,9 +831,12 @@ main() {
         -h|--help)
             cat <<EOF
 Usage:
-  bash setup.sh                 # Interactive wizard hub
-  bash setup.sh --full-setup    # Run first-time setup flow directly
-  bash setup.sh --module NAME   # Run setup for one module
+  bash wizard.sh                 # Interactive wizard hub
+  bash wizard.sh --full-setup    # Run first-time setup flow directly
+  bash wizard.sh --module NAME   # Run setup for one module
+  bash wizard.sh --from-engine   # Write deploy.yaml (proxy.mode: integrate), skip apply
+  bash wizard.sh --no-apply      # Write deploy.yaml without applying
+  bash wizard.sh --proxy-mode standalone|integrate
 EOF
             ;;
         *)
@@ -812,5 +844,35 @@ EOF
             ;;
     esac
 }
+
+_parsed_args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --from-engine)
+            NO_APPLY=1
+            PROXY_MODE="integrate"
+            _parsed_args+=(--full-setup)
+            shift
+            ;;
+        --no-apply)
+            NO_APPLY=1
+            shift
+            ;;
+        --proxy-mode)
+            [[ $# -ge 2 ]] || die "--proxy-mode requires a value"
+            PROXY_MODE="$2"
+            shift 2
+            ;;
+        --proxy-mode=*)
+            PROXY_MODE="${1#*=}"
+            shift
+            ;;
+        *)
+            _parsed_args+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${_parsed_args[@]}"
 
 main "$@"

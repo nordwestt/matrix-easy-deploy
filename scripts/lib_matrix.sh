@@ -45,11 +45,20 @@ build_caddy_compose_args() {
     fi
 }
 
+append_integrate_overlay() {
+    local -n _compose_args=$1
+    local overlay="$2"
+    if [[ -f "$overlay" ]]; then
+        _compose_args+=(-f "$overlay")
+    fi
+}
+
 build_core_compose_args() {
     CORE_COMPOSE_ARGS=(-f docker-compose.yml)
     if [[ -f "${1}/modules/core/docker-compose.guest.yml" ]]; then
         CORE_COMPOSE_ARGS+=(-f docker-compose.guest.yml)
     fi
+    append_integrate_overlay CORE_COMPOSE_ARGS "${1}/.matrix-easy-deploy/compose/core.yml"
 }
 
 build_core_compose_start_profiles() {
@@ -73,6 +82,35 @@ build_calls_compose_args() {
     fi
     if [[ "${GUEST_ACCESS_ENABLED:-false}" == "true" ]]; then
         CALLS_COMPOSE_ARGS+=(--profile guest-calls)
+    fi
+    append_integrate_overlay CALLS_COMPOSE_ARGS "${1}/.matrix-easy-deploy/compose/calls.yml"
+}
+
+build_mas_compose_args() {
+    MAS_COMPOSE_ARGS=(-f docker-compose.yml)
+    append_integrate_overlay MAS_COMPOSE_ARGS "${1}/.matrix-easy-deploy/compose/mas.yml"
+}
+
+build_hookshot_compose_args() {
+    HOOKSHOT_COMPOSE_ARGS=(-f docker-compose.yml)
+    append_integrate_overlay HOOKSHOT_COMPOSE_ARGS "${1}/.matrix-easy-deploy/compose/hookshot.yml"
+}
+
+build_whatsapp_compose_args() {
+    WHATSAPP_COMPOSE_ARGS=(-f docker-compose.yml)
+    append_integrate_overlay WHATSAPP_COMPOSE_ARGS "${1}/.matrix-easy-deploy/compose/whatsapp.yml"
+}
+
+build_slack_compose_args() {
+    SLACK_COMPOSE_ARGS=(-f docker-compose.yml)
+    append_integrate_overlay SLACK_COMPOSE_ARGS "${1}/.matrix-easy-deploy/compose/slack.yml"
+}
+
+stop_standalone_matrix_caddy() {
+    if docker inspect caddy &>/dev/null; then
+        info "Stopping standalone Matrix caddy (integrate mode uses easydeploy-engine)…"
+        docker stop caddy >/dev/null 2>&1 || true
+        docker rm caddy >/dev/null 2>&1 || true
     fi
 }
 

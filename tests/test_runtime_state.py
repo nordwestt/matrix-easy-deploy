@@ -90,6 +90,31 @@ class RuntimeStateTests(unittest.TestCase):
             state = runtime_state.resolve_runtime_state(root)
             self.assertEqual(state["GUEST_ACCESS_ENABLED"], "true")
 
+    def test_proxy_mode_from_deploy_yaml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "deploy.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "proxy": {
+                            "type": "caddy",
+                            "mode": "integrate",
+                            "integrate": {"network": "easydeploy-net"},
+                        }
+                    },
+                    sort_keys=False,
+                )
+            )
+            state = runtime_state.resolve_runtime_state(root)
+            self.assertEqual(state["PROXY_MODE"], "integrate")
+            self.assertEqual(state["INTEGRATE_NETWORK"], "easydeploy-net")
+
+    def test_proxy_mode_defaults_standalone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = runtime_state.resolve_runtime_state(root)
+            self.assertEqual(state["PROXY_MODE"], "standalone")
+
 
 if __name__ == "__main__":
     unittest.main()
