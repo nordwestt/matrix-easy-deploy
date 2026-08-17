@@ -318,7 +318,7 @@ edit_deploy_config() {
 
 run_full_setup() {
     print_banner
-    check_dependencies
+    ensure_dependencies_installed
 
     echo
     echo -e "${BOLD}  Step 1 of 5 — Configuration${RESET}"

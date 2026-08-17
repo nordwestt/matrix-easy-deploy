@@ -202,7 +202,7 @@ For first-time setup without the menu:
 bash matrix-wizard.sh --full-setup
 ```
 
-The wizard still checks dependencies, but `bash ensure_dependencies.sh` is the faster non-interactive path when you already know you want a standard install.
+The wizard installs missing host tools (including borg, borgmatic, and age) when you run it. `bash ensure_dependencies.sh` is the non-interactive path.
 
 For unattended wizard automation, you can optionally set `ADMIN_PASSWORD` before `--full-setup`:
 
