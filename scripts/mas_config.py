@@ -194,17 +194,24 @@ def build_kanidm_matrix_client(
     matrix_domain: str,
     kanidm_domain: str,
     client_id: str,
+    element_domain: str = "",
 ) -> dict[str, Any]:
     origin = f"https://{matrix_domain.rstrip('/')}"
-    return {
+    app_host = str(element_domain or matrix_domain).strip().rstrip("/")
+    app = f"https://{app_host}"
+    client = {
         "client_id": client_id,
         "client_name": "Matrix",
         "public": False,
         "prefer_short_username": True,
-        "landing_url": origin,
+        "landing_url": app,
         "redirect_uris": [matrix_kanidm_redirect_uri(matrix_domain, kanidm_domain, client_id)],
         "scopes": ["openid", "profile", "email"],
     }
+    if str(element_domain or "").strip():
+        # Element's tab icon is ICO; Kanidm only accepts PNG/SVG/WebP/JPEG/GIF.
+        client["image"] = f"{app}/vector-icons/144.png"
+    return client
 
 
 def apply_engine_oidc_sidecar(config: dict, sidecar_path: Path | None = None) -> None:

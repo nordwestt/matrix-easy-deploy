@@ -442,6 +442,11 @@ def provision_local_kanidm_oidc(ctx: ApplyContext, config: dict) -> list[str]:
     if not matrix_domain or matrix_domain == "matrix.example.com":
         return notes
 
+    element = features.get("element") if isinstance(features.get("element"), dict) else {}
+    element_domain = ""
+    if bool(element.get("enabled", True)):
+        element_domain = str(element.get("domain") or matrix_domain).strip()
+
     client_id = mas_config.DEFAULT_MATRIX_OIDC_CLIENT_ID
     kanidm_root = Path(kanidm_deploy).parent if kanidm_deploy else None
     kanidm_sidecar = (
@@ -477,6 +482,7 @@ def provision_local_kanidm_oidc(ctx: ApplyContext, config: dict) -> list[str]:
                 matrix_domain=matrix_domain,
                 kanidm_domain=kanidm_domain,
                 client_id=client_id,
+                element_domain=element_domain,
             ),
             header=mas_config.KANIDM_CLIENT_SIDECAR_HEADER,
         )

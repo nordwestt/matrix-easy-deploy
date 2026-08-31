@@ -124,6 +124,34 @@ class MasConfigUpstreamOauth2Tests(unittest.TestCase):
             ),
         )
 
+    def test_build_kanidm_matrix_client_uses_element_host_for_app_tile(self):
+        same_host = mas_config.build_kanidm_matrix_client(
+            matrix_domain="matrix.example.com",
+            kanidm_domain="idm.example.com",
+            client_id="matrix",
+            element_domain="matrix.example.com",
+        )
+        self.assertEqual(same_host["landing_url"], "https://matrix.example.com")
+        self.assertEqual(same_host["image"], "https://matrix.example.com/vector-icons/144.png")
+
+        split = mas_config.build_kanidm_matrix_client(
+            matrix_domain="matrix.example.com",
+            kanidm_domain="idm.example.com",
+            client_id="matrix",
+            element_domain="chat.example.com",
+        )
+        self.assertEqual(split["landing_url"], "https://chat.example.com")
+        self.assertEqual(split["image"], "https://chat.example.com/vector-icons/144.png")
+        self.assertTrue(split["redirect_uris"][0].startswith("https://matrix.example.com/auth/"))
+
+        no_element = mas_config.build_kanidm_matrix_client(
+            matrix_domain="matrix.example.com",
+            kanidm_domain="idm.example.com",
+            client_id="matrix",
+        )
+        self.assertEqual(no_element["landing_url"], "https://matrix.example.com")
+        self.assertNotIn("image", no_element)
+
     def test_resolve_sso_default_login_kanidm_vs_chooser(self):
         kanidm = {
             "features": {

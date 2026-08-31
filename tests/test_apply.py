@@ -1723,6 +1723,8 @@ class ApplyTests(unittest.TestCase):
                 "https://matrix.test.example/auth/upstream/callback/"
             )
         )
+        self.assertEqual(kanidm_client["landing_url"], "https://matrix.test.example")
+        self.assertEqual(kanidm_client["image"], "https://matrix.test.example/vector-icons/144.png")
         sidecar.write_text(
             sidecar.read_text() + "client_secret: s3cret\n"
         )
