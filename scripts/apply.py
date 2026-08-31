@@ -394,46 +394,46 @@ def oidc_provider_sidecar_path(ctx: ApplyContext) -> Path:
     return ctx.integration_dir / "oidc-provider.yaml"
 
 
-def provision_local_authelia_oidc(ctx: ApplyContext, config: dict) -> list[str]:
-    """Write Authelia + MAS sidecars when Authelia is a sibling (standalone path)."""
+def provision_local_kanidm_oidc(ctx: ApplyContext, config: dict) -> list[str]:
+    """Write Kanidm + MAS sidecars when Kanidm is a sibling (standalone path)."""
     notes: list[str] = []
     features = config.get("features") if isinstance(config.get("features"), dict) else {}
     sso = features.get("sso") if isinstance(features.get("sso"), dict) else {}
     if mas_config.managed_is_false(sso):
         return notes
     provider = str(sso.get("provider") or "").strip().lower()
-    if provider and provider != "authelia":
+    if provider and provider not in mas_config.LOCAL_IDP_PROVIDERS:
         return notes
 
     sidecar_path = oidc_provider_sidecar_path(ctx)
     if sidecar_path.is_file():
         return notes
 
-    wants_authelia = provider == "authelia"
+    wants_kanidm = provider in mas_config.LOCAL_IDP_PROVIDERS
     providers = sso.get("providers") if isinstance(sso.get("providers"), list) else []
-    if not wants_authelia:
+    if not wants_kanidm:
         if not bool(sso.get("enabled")):
             return notes
-        if providers and not any(mas_config.is_authelia_sso_provider(item) for item in providers):
+        if providers and not any(mas_config.is_kanidm_sso_provider(item) for item in providers):
             return notes
         if providers and any(
             isinstance(item, dict)
-            and mas_config.is_authelia_sso_provider(item)
+            and mas_config.is_kanidm_sso_provider(item)
             and str(item.get("client_secret") or "").strip()
             for item in providers
         ):
             return notes
 
-    from scripts.config_edit import discover_local_authelia
+    from scripts.config_edit import discover_local_kanidm
 
-    found = discover_local_authelia(ctx.project_root)
-    authelia_domain = str(found.get("domain") or "").strip()
-    authelia_deploy = str(found.get("deploy") or "").strip()
-    if not authelia_domain:
-        if wants_authelia:
+    found = discover_local_kanidm(ctx.project_root)
+    kanidm_domain = str(found.get("domain") or "").strip()
+    kanidm_deploy = str(found.get("deploy") or "").strip()
+    if not kanidm_domain:
+        if wants_kanidm:
             notes.append(
-                "features.sso.provider is authelia but no local Authelia was found. "
-                "The engine sidecar, or a sibling authelia-easy-deploy checkout, is required."
+                "features.sso.provider is kanidm but no local Kanidm was found. "
+                "The engine sidecar, or a sibling kanidm-easy-deploy checkout, is required."
             )
         return notes
 
@@ -443,49 +443,60 @@ def provision_local_authelia_oidc(ctx: ApplyContext, config: dict) -> list[str]:
         return notes
 
     client_id = mas_config.DEFAULT_MATRIX_OIDC_CLIENT_ID
-    authelia_root = Path(authelia_deploy).parent if authelia_deploy else None
-    authelia_sidecar = (
-        authelia_root / ".authelia-easy-deploy" / "integration" / "oidc-clients.d" / f"{client_id}.yaml"
-        if authelia_root is not None
+    kanidm_root = Path(kanidm_deploy).parent if kanidm_deploy else None
+    kanidm_sidecar = (
+        kanidm_root / ".kanidm-easy-deploy" / "integration" / "oidc-clients.d" / f"{client_id}.yaml"
+        if kanidm_root is not None
         else Path()
     )
-    secret = mas_config.load_or_create_matrix_oidc_secret(sidecar_path, authelia_sidecar)
+    existing_secret = mas_config.plaintext_oidc_secret(
+        str(
+            (
+                (yaml.safe_load(sidecar_path.read_text()) or {})
+                if sidecar_path.is_file()
+                else {}
+            ).get("client_secret")
+            or ""
+        )
+    )
+    if existing_secret.startswith("$"):
+        existing_secret = ""
     mas_config.write_oidc_sidecar(
         sidecar_path,
-        mas_config.build_mas_authelia_provider(
-            authelia_domain=authelia_domain,
+        mas_config.build_mas_kanidm_provider(
+            kanidm_domain=kanidm_domain,
             client_id=client_id,
-            client_secret=secret,
+            client_secret=existing_secret,
         ),
     )
-    notes.append(f"Wrote Matrix Authelia OIDC sidecar ({sidecar_path}).")
-    if authelia_root is not None and authelia_root.is_dir():
+    notes.append(f"Wrote Matrix Kanidm OIDC sidecar ({sidecar_path}).")
+    if kanidm_root is not None and kanidm_root.is_dir():
         mas_config.write_oidc_sidecar(
-            authelia_sidecar,
-            mas_config.build_authelia_matrix_client(
+            kanidm_sidecar,
+            mas_config.build_kanidm_matrix_client(
                 matrix_domain=matrix_domain,
-                authelia_domain=authelia_domain,
+                kanidm_domain=kanidm_domain,
                 client_id=client_id,
-                client_secret=secret,
             ),
-            header=mas_config.AUTHELIA_CLIENT_SIDECAR_HEADER,
+            header=mas_config.KANIDM_CLIENT_SIDECAR_HEADER,
         )
         notes.append(
-            f"Wrote Authelia client sidecar ({authelia_sidecar}). "
-            "Re-run bash apply.sh in authelia-easy-deploy if Authelia is already deployed."
+            f"Wrote Kanidm client sidecar ({kanidm_sidecar}). "
+            "Re-run bash apply.sh in kanidm-easy-deploy if Kanidm is already deployed, "
+            "then re-apply Matrix so MAS receives the client secret."
         )
     else:
-        redirect = mas_config.matrix_authelia_redirect_uri(matrix_domain, authelia_domain)
+        redirect = mas_config.matrix_kanidm_redirect_uri(matrix_domain, kanidm_domain)
         notes.append(
-            "No sibling Authelia checkout found. Register a confidential OIDC client on Authelia "
+            "No sibling Kanidm checkout found. Register a confidential OIDC client on Kanidm "
             f"with redirect URI {redirect} and client_id {client_id}."
         )
     return notes
 
 
 def prepare_sso_config(ctx: ApplyContext, config: dict) -> list[str]:
-    """Assign Authelia sidecars (if needed) and merge them in memory for this apply."""
-    notes = provision_local_authelia_oidc(ctx, config)
+    """Assign Kanidm sidecars (if needed) and merge them in memory for this apply."""
+    notes = provision_local_kanidm_oidc(ctx, config)
     mas_config.apply_engine_oidc_sidecar(config, oidc_provider_sidecar_path(ctx))
     return notes
 
@@ -1769,7 +1780,7 @@ def apply_calls_element_config(target: dict, config: dict) -> None:
 
 
 def apply_sso_login_defaults(element_json: dict, config: dict) -> None:
-    """Send Element users straight to Authelia unless the operator asked for a chooser."""
+    """Send Element users straight to Kanidm unless the operator asked for a chooser."""
     features = config.get("features") if isinstance(config.get("features"), dict) else {}
     element_cfg = features.get("element") if isinstance(features.get("element"), dict) else {}
     explicit = element_cfg.get("sso_redirect_options") if "sso_redirect_options" in element_cfg else None

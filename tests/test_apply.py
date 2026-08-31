@@ -87,16 +87,16 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(derived["LOCAL_LOGIN_ENABLED"], "false")
         self.assertIn("matrix_authentication_service:", derived["SYNAPSE_MAS_AUTH_SERVICE_SECTION"])
 
-    def test_derive_values_authelia_disables_mas_password_login(self):
+    def test_derive_values_kanidm_disables_mas_password_login(self):
         cfg = self.sample_config()
         cfg["features"]["local_login_enabled"] = True
         cfg["features"]["sso"] = {
             "enabled": True,
-            "provider": "authelia",
+            "provider": "kanidm",
             "providers": [
                 {
-                    "name": "Authelia",
-                    "issuer": "https://auth.example.com",
+                    "name": "Kanidm",
+                    "issuer": "https://idm.example.com/oauth2/openid/matrix",
                     "client_id": "matrix",
                     "client_secret": "secret",
                 }
@@ -105,17 +105,17 @@ class ApplyTests(unittest.TestCase):
         derived = apply.derive_values(cfg, server_ip="1.2.3.4")
         self.assertEqual(derived["MAS_LOCAL_LOGIN_ENABLED"], "false")
 
-    def test_derive_values_authelia_chooser_keeps_mas_password_login(self):
+    def test_derive_values_kanidm_chooser_keeps_mas_password_login(self):
         cfg = self.sample_config()
         cfg["features"]["local_login_enabled"] = True
         cfg["features"]["sso"] = {
             "enabled": True,
-            "provider": "authelia",
+            "provider": "kanidm",
             "default_login": "chooser",
             "providers": [
                 {
-                    "name": "Authelia",
-                    "issuer": "https://auth.example.com",
+                    "name": "Kanidm",
+                    "issuer": "https://idm.example.com/oauth2/openid/matrix",
                     "client_id": "matrix",
                     "client_secret": "secret",
                 }
@@ -754,16 +754,16 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(merged["element_call"]["url"], "https://call.element.io")
         self.assertTrue(merged["features"]["feature_group_calls"])
 
-    def test_build_element_config_authelia_defaults_to_sso_redirect(self):
+    def test_build_element_config_kanidm_defaults_to_sso_redirect(self):
         cfg = self.sample_config()
         cfg["features"]["sso"] = {
             "enabled": True,
-            "provider": "authelia",
+            "provider": "kanidm",
             "providers": [
                 {
                     "id": "01HFVBY12TMNTYTBV8W921M5FA",
-                    "name": "Authelia",
-                    "issuer": "https://auth.example.com",
+                    "name": "Kanidm",
+                    "issuer": "https://idm.example.com/oauth2/openid/matrix",
                     "client_id": "matrix",
                     "client_secret": "secret",
                 }
@@ -775,17 +775,17 @@ class ApplyTests(unittest.TestCase):
             {"on_welcome_page": True, "on_login_page": True},
         )
 
-    def test_build_element_config_authelia_chooser_disables_sso_redirect(self):
+    def test_build_element_config_kanidm_chooser_disables_sso_redirect(self):
         cfg = self.sample_config()
         cfg["features"]["sso"] = {
             "enabled": True,
-            "provider": "authelia",
+            "provider": "kanidm",
             "default_login": "chooser",
             "providers": [
                 {
                     "id": "01HFVBY12TMNTYTBV8W921M5FA",
-                    "name": "Authelia",
-                    "issuer": "https://auth.example.com",
+                    "name": "Kanidm",
+                    "issuer": "https://idm.example.com/oauth2/openid/matrix",
                     "client_id": "matrix",
                     "client_secret": "secret",
                 }
@@ -1598,14 +1598,14 @@ class ApplyTests(unittest.TestCase):
         mock_postgres.assert_called_once_with(ctx)
         mock_bootstrap.assert_called_once()
 
-    def test_apply_engine_oidc_sidecar_fills_authelia_provider(self):
+    def test_apply_engine_oidc_sidecar_fills_kanidm_provider(self):
         sidecar = self.root / "oidc-provider.yaml"
         sidecar.write_text(
             "\n".join(
                 [
-                    "provider: authelia",
-                    "name: Authelia",
-                    "issuer: https://auth.test.example",
+                    "provider: kanidm",
+                    "name: Kanidm",
+                    "issuer: https://idm.test.example/oauth2/openid/matrix",
                     "client_id: matrix",
                     "client_secret: s3cret",
                     "id: 01HFVBY12TMNTYTBV8W921M5FA",
@@ -1613,17 +1613,20 @@ class ApplyTests(unittest.TestCase):
                 ]
             )
         )
-        config = {"features": {"sso": {"enabled": True, "provider": "authelia", "providers": []}}}
+        config = {"features": {"sso": {"enabled": True, "provider": "kanidm", "providers": []}}}
         mas_config.apply_engine_oidc_sidecar(config, sidecar)
         providers = config["features"]["sso"]["providers"]
         self.assertEqual(len(providers), 1)
         self.assertEqual(providers[0]["client_secret"], "s3cret")
-        self.assertEqual(providers[0]["issuer"], "https://auth.test.example")
+        self.assertEqual(providers[0]["issuer"], "https://idm.test.example/oauth2/openid/matrix")
         self.assertEqual(providers[0]["id"], "01HFVBY12TMNTYTBV8W921M5FA")
 
     def test_apply_engine_oidc_sidecar_skips_google_providers(self):
         sidecar = self.root / "oidc-provider.yaml"
-        sidecar.write_text("provider: authelia\nissuer: https://auth.test.example\nclient_id: matrix\nclient_secret: x\n")
+        sidecar.write_text(
+            "provider: kanidm\nissuer: https://idm.test.example/oauth2/openid/matrix\n"
+            "client_id: matrix\nclient_secret: x\n"
+        )
         config = {
             "features": {
                 "sso": {
@@ -1643,36 +1646,41 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(len(config["features"]["sso"]["providers"]), 1)
         self.assertEqual(config["features"]["sso"]["providers"][0]["name"], "Google")
 
-    def test_provision_local_authelia_oidc_writes_sibling_sidecars(self):
+    def test_provision_local_kanidm_oidc_writes_sibling_sidecars(self):
         layout = self.root / "layout"
         matrix = layout / "matrix-easy-deploy"
-        authelia = layout / "authelia-easy-deploy"
+        kanidm = layout / "kanidm-easy-deploy"
         matrix.mkdir(parents=True)
-        authelia.mkdir()
-        (authelia / "deploy.yaml").write_text(
-            yaml.safe_dump({"authelia": {"domain": "auth.test.example", "sso_domain": "test.example"}})
+        kanidm.mkdir()
+        (kanidm / "deploy.yaml").write_text(
+            yaml.safe_dump({"kanidm": {"domain": "idm.test.example"}})
         )
         ctx = apply.ApplyContext(matrix)
         config = {
             "matrix": {"domain": "matrix.test.example"},
-            "features": {"sso": {"enabled": True, "provider": "authelia", "providers": []}},
+            "features": {"sso": {"enabled": True, "provider": "kanidm", "providers": []}},
         }
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("EASYDEPLOY_AUTHELIA_DEPLOY", None)
-            os.environ.pop("EASYDEPLOY_AUTHELIA_DOMAIN", None)
-            notes = apply.provision_local_authelia_oidc(ctx, config)
+            os.environ.pop("EASYDEPLOY_KANIDM_DEPLOY", None)
+            os.environ.pop("EASYDEPLOY_KANIDM_DOMAIN", None)
+            notes = apply.provision_local_kanidm_oidc(ctx, config)
         sidecar = ctx.integration_dir / "oidc-provider.yaml"
-        client = authelia / ".authelia-easy-deploy" / "integration" / "oidc-clients.d" / "matrix.yaml"
+        client = kanidm / ".kanidm-easy-deploy" / "integration" / "oidc-clients.d" / "matrix.yaml"
         self.assertTrue(sidecar.is_file(), notes)
         self.assertTrue(client.is_file(), notes)
-        self.assertIn("oidc.managed", client.read_text())
         provider = yaml.safe_load(sidecar.read_text())
-        authelia_client = yaml.safe_load(client.read_text())
-        self.assertEqual(provider["issuer"], "https://auth.test.example")
+        kanidm_client = yaml.safe_load(client.read_text())
+        self.assertEqual(provider["issuer"], "https://idm.test.example/oauth2/openid/matrix")
         self.assertEqual(provider["client_id"], "matrix")
-        self.assertTrue(provider["client_secret"])
-        self.assertIn(provider["client_secret"], authelia_client["client_secret"])
-        self.assertTrue(authelia_client["redirect_uris"][0].startswith("https://matrix.test.example/auth/upstream/callback/"))
+        self.assertNotIn("client_secret", provider)
+        self.assertTrue(
+            kanidm_client["redirect_uris"][0].startswith(
+                "https://matrix.test.example/auth/upstream/callback/"
+            )
+        )
+        sidecar.write_text(
+            sidecar.read_text() + "client_secret: s3cret\n"
+        )
         mas_config.apply_engine_oidc_sidecar(config, sidecar)
         mas_config.validate_sso_config(config)
 

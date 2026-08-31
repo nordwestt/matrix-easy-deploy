@@ -54,22 +54,29 @@ def mas_upstream_redirect_uri(mas_public_base: str, provider_id: str) -> str:
     return f"{base}/upstream/callback/{provider_id}"
 
 
-AUTHELIA_SSO_NAME = "Authelia"
+KANIDM_SSO_NAME = "Kanidm"
 DEFAULT_MATRIX_OIDC_CLIENT_ID = "matrix"
+LOCAL_IDP_PROVIDERS = {"kanidm"}
 
 
-def authelia_issuer_url(authelia_domain: str) -> str:
-    return f"https://{str(authelia_domain).strip().rstrip('/')}"
+def kanidm_issuer_url(kanidm_domain: str, client_id: str = DEFAULT_MATRIX_OIDC_CLIENT_ID) -> str:
+    return f"https://{str(kanidm_domain).strip().rstrip('/')}/oauth2/openid/{client_id}"
 
 
-def matrix_authelia_provider_id(authelia_domain: str) -> str:
-    return stable_provider_ulid(AUTHELIA_SSO_NAME, authelia_issuer_url(authelia_domain))
+def matrix_kanidm_provider_id(
+    kanidm_domain: str, client_id: str = DEFAULT_MATRIX_OIDC_CLIENT_ID
+) -> str:
+    return stable_provider_ulid(KANIDM_SSO_NAME, kanidm_issuer_url(kanidm_domain, client_id))
 
 
-def matrix_authelia_redirect_uri(matrix_domain: str, authelia_domain: str) -> str:
+def matrix_kanidm_redirect_uri(
+    matrix_domain: str,
+    kanidm_domain: str,
+    client_id: str = DEFAULT_MATRIX_OIDC_CLIENT_ID,
+) -> str:
     return mas_upstream_redirect_uri(
         mas_public_base(matrix_domain),
-        matrix_authelia_provider_id(authelia_domain),
+        matrix_kanidm_provider_id(kanidm_domain, client_id),
     )
 
 
@@ -80,17 +87,21 @@ def managed_is_false(section: dict | None) -> bool:
     return str(value or "").strip().lower() in {"false", "no", "0"}
 
 
-def is_authelia_sso_provider(provider: dict | None) -> bool:
+def is_local_idp_sso_provider(provider: dict | None) -> bool:
     if not isinstance(provider, dict):
         return False
     name = str(provider.get("name") or "").strip().lower()
     client_id = str(provider.get("client_id") or "").strip().lower()
     issuer = str(provider.get("issuer") or "").strip().lower()
-    if name == "authelia":
+    if name in LOCAL_IDP_PROVIDERS:
         return True
     if client_id == DEFAULT_MATRIX_OIDC_CLIENT_ID or client_id.startswith("matrix-"):
         return True
-    return "authelia" in issuer
+    return "kanidm" in issuer or "/oauth2/openid/" in issuer
+
+
+def is_kanidm_sso_provider(provider: dict | None) -> bool:
+    return is_local_idp_sso_provider(provider)
 
 
 SSO_DEFAULT_LOGIN_SSO = "sso"
@@ -99,7 +110,7 @@ SSO_DEFAULT_LOGIN_CHOOSER = "chooser"
 
 def normalize_sso_default_login(value: Any) -> str:
     raw = str(value or "").strip().lower()
-    if raw in {"sso", "idp", "authelia"}:
+    if raw in {"sso", "idp", "kanidm"}:
         return SSO_DEFAULT_LOGIN_SSO
     if raw in {"chooser", "both", "local", "password"}:
         return SSO_DEFAULT_LOGIN_CHOOSER
@@ -107,7 +118,7 @@ def normalize_sso_default_login(value: Any) -> str:
 
 
 def resolve_sso_default_login(config: dict) -> str:
-    """Element login: Authelia defaults to SSO-first; other IdPs keep the chooser."""
+    """Element login: Kanidm defaults to SSO-first; other IdPs keep the chooser."""
     features = config.get("features") if isinstance(config.get("features"), dict) else {}
     sso = features.get("sso") if isinstance(features.get("sso"), dict) else {}
     if not bool(sso.get("enabled")):
@@ -116,17 +127,17 @@ def resolve_sso_default_login(config: dict) -> str:
     if "default_login" in sso and sso.get("default_login") not in (None, ""):
         return normalize_sso_default_login(sso.get("default_login"))
     provider = str(sso.get("provider") or "").strip().lower()
-    if provider == "authelia" or any(is_authelia_sso_provider(item) for item in providers):
+    if provider in LOCAL_IDP_PROVIDERS or any(is_local_idp_sso_provider(item) for item in providers):
         return SSO_DEFAULT_LOGIN_SSO
     return SSO_DEFAULT_LOGIN_CHOOSER
 
 
 MATRIX_OIDC_SIDECAR_HEADER = (
-    "# Generated for Authelia OIDC. Secrets stay here, not in deploy.yaml.\n"
+    "# Generated for Kanidm OIDC. Secrets stay here, not in deploy.yaml.\n"
     "# Set features.sso.managed: false to ignore.\n"
 )
-AUTHELIA_CLIENT_SIDECAR_HEADER = (
-    "# Generated for Matrix MAS. Re-apply Authelia after this file changes.\n"
+KANIDM_CLIENT_SIDECAR_HEADER = (
+    "# Generated for Matrix MAS. Re-apply Kanidm after this file changes.\n"
     "# Set oidc.managed: false to ignore kit/engine client sidecars.\n"
 )
 
@@ -149,77 +160,53 @@ def plaintext_oidc_secret(value: str) -> str:
     return secret
 
 
-def authelia_client_secret_digest(secret: str) -> str:
-    digest = str(secret or "").strip()
-    if digest.startswith("$"):
-        return digest
-    return f"$plaintext${digest}"
-
-
 def write_oidc_sidecar(path: Path, data: dict, *, header: str = MATRIX_OIDC_SIDECAR_HEADER) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     body = yaml.safe_dump(data, default_flow_style=False, sort_keys=False)
     path.write_text(header + body)
 
 
-def load_or_create_matrix_oidc_secret(matrix_sidecar: Path, authelia_sidecar: Path) -> str:
-    for path in (matrix_sidecar, authelia_sidecar):
-        if not path.is_file():
-            continue
-        data = yaml.safe_load(path.read_text()) or {}
-        if not isinstance(data, dict):
-            continue
-        secret = plaintext_oidc_secret(str(data.get("client_secret") or ""))
-        if secret and not secret.startswith("$"):
-            return secret
-    return secrets.token_urlsafe(32)
-
-
-def build_mas_authelia_provider(
+def build_mas_kanidm_provider(
     *,
-    authelia_domain: str,
+    kanidm_domain: str,
     client_id: str,
-    client_secret: str,
+    client_secret: str = "",
 ) -> dict[str, Any]:
-    issuer = authelia_issuer_url(authelia_domain)
-    return {
-        "provider": "authelia",
-        "name": AUTHELIA_SSO_NAME,
+    issuer = kanidm_issuer_url(kanidm_domain, client_id)
+    provider = {
+        "provider": "kanidm",
+        "name": KANIDM_SSO_NAME,
         "issuer": issuer,
         "client_id": client_id,
-        "client_secret": client_secret,
-        "id": matrix_authelia_provider_id(authelia_domain),
+        "id": matrix_kanidm_provider_id(kanidm_domain, client_id),
         "allow_registration": True,
         "scopes": ["openid", "profile", "email"],
     }
+    if client_secret:
+        provider["client_secret"] = client_secret
+    return provider
 
 
-def build_authelia_matrix_client(
+def build_kanidm_matrix_client(
     *,
     matrix_domain: str,
-    authelia_domain: str,
+    kanidm_domain: str,
     client_id: str,
-    client_secret: str,
-    authorization_policy: str = "two_factor",
 ) -> dict[str, Any]:
+    origin = f"https://{matrix_domain.rstrip('/')}"
     return {
         "client_id": client_id,
         "client_name": "Matrix",
-        "claims_policy": "matrix",
         "public": False,
-        "authorization_policy": authorization_policy,
-        "require_pkce": False,
-        "token_endpoint_auth_method": "client_secret_basic",
-        "client_secret": authelia_client_secret_digest(client_secret),
-        "redirect_uris": [matrix_authelia_redirect_uri(matrix_domain, authelia_domain)],
+        "prefer_short_username": True,
+        "landing_url": origin,
+        "redirect_uris": [matrix_kanidm_redirect_uri(matrix_domain, kanidm_domain, client_id)],
         "scopes": ["openid", "profile", "email"],
-        "grant_types": ["authorization_code", "refresh_token"],
-        "response_types": ["code"],
     }
 
 
 def apply_engine_oidc_sidecar(config: dict, sidecar_path: Path | None = None) -> None:
-    """Merge Authelia OIDC settings from a sidecar. Operator deploy.yaml wins when set."""
+    """Merge Kanidm OIDC settings from a sidecar. Operator deploy.yaml wins when set."""
     if sidecar_path is None or not sidecar_path.is_file():
         return
     sidecar = yaml.safe_load(sidecar_path.read_text()) or {}
@@ -234,14 +221,14 @@ def apply_engine_oidc_sidecar(config: dict, sidecar_path: Path | None = None) ->
     if managed_is_false(sso):
         return
     existing_provider = str(sso.get("provider") or "").strip().lower()
-    if existing_provider and existing_provider != "authelia":
+    if existing_provider and existing_provider not in LOCAL_IDP_PROVIDERS:
         return
     providers = sso.get("providers")
     if not isinstance(providers, list):
         providers = []
         sso["providers"] = providers
-    if providers and not any(is_authelia_sso_provider(item) for item in providers):
-        if existing_provider != "authelia":
+    if providers and not any(is_local_idp_sso_provider(item) for item in providers):
+        if existing_provider not in LOCAL_IDP_PROVIDERS:
             return
 
     entry = {
@@ -254,7 +241,7 @@ def apply_engine_oidc_sidecar(config: dict, sidecar_path: Path | None = None) ->
 
     match_index = None
     for index, provider in enumerate(providers):
-        if is_authelia_sso_provider(provider):
+        if is_local_idp_sso_provider(provider):
             match_index = index
             break
     if match_index is None:
@@ -267,7 +254,7 @@ def apply_engine_oidc_sidecar(config: dict, sidecar_path: Path | None = None) ->
         providers[match_index] = merged
 
     sso["enabled"] = True
-    sso.setdefault("provider", "authelia")
+    sso.setdefault("provider", "kanidm")
 
 
 def ensure_sso_provider_ids(config: dict) -> bool:
@@ -479,7 +466,7 @@ def resolve_mas_runtime_config(config: dict) -> dict[str, Any]:
     hs_impl = homeserver.normalize_implementation(matrix.get("server_implementation", "synapse"))
     sso = get_sso_config(features)
     local_login_enabled = bool(features.get("local_login_enabled", True))
-    # Authelia-first: hide MAS password login so it auto-redirects to the only upstream IdP.
+    # Kanidm-first: hide MAS password login so it auto-redirects to the only upstream IdP.
     if resolve_sso_default_login(config) == SSO_DEFAULT_LOGIN_SSO:
         local_login_enabled = False
 

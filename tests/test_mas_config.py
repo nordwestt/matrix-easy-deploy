@@ -109,26 +109,34 @@ class MasConfigUpstreamOauth2Tests(unittest.TestCase):
             "https://matrix.example.com/auth/upstream/callback/01HFVBY12TMNTYTBV8W921M5FA",
         )
 
-    def test_matrix_authelia_redirect_uri_matches_mas_public_base(self):
-        uri = mas_config.matrix_authelia_redirect_uri("matrix.test.example", "auth.test.example")
-        provider_id = mas_config.matrix_authelia_provider_id("auth.test.example")
+    def test_matrix_kanidm_redirect_uri_matches_mas_public_base(self):
+        uri = mas_config.matrix_kanidm_redirect_uri("matrix.test.example", "idm.test.example")
+        provider_id = mas_config.matrix_kanidm_provider_id("idm.test.example")
         self.assertEqual(len(provider_id), 26)
         self.assertEqual(
             uri,
             f"https://matrix.test.example/auth/upstream/callback/{provider_id}",
         )
         self.assertEqual(
-            mas_config.matrix_authelia_provider_id("auth.test.example"),
-            mas_config.stable_provider_ulid("Authelia", "https://auth.test.example"),
+            mas_config.matrix_kanidm_provider_id("idm.test.example"),
+            mas_config.stable_provider_ulid(
+                "Kanidm", "https://idm.test.example/oauth2/openid/matrix"
+            ),
         )
 
-    def test_resolve_sso_default_login_authelia_vs_chooser(self):
-        authelia = {
+    def test_resolve_sso_default_login_kanidm_vs_chooser(self):
+        kanidm = {
             "features": {
                 "sso": {
                     "enabled": True,
-                    "provider": "authelia",
-                    "providers": [{"name": "Authelia", "issuer": "https://auth.test.example", "client_id": "matrix"}],
+                    "provider": "kanidm",
+                    "providers": [
+                        {
+                            "name": "Kanidm",
+                            "issuer": "https://idm.test.example/oauth2/openid/matrix",
+                            "client_id": "matrix",
+                        }
+                    ],
                 }
             }
         }
@@ -146,10 +154,10 @@ class MasConfigUpstreamOauth2Tests(unittest.TestCase):
                 }
             }
         }
-        self.assertEqual(mas_config.resolve_sso_default_login(authelia), "sso")
+        self.assertEqual(mas_config.resolve_sso_default_login(kanidm), "sso")
         self.assertEqual(mas_config.resolve_sso_default_login(google), "chooser")
-        authelia["features"]["sso"]["default_login"] = "chooser"
-        self.assertEqual(mas_config.resolve_sso_default_login(authelia), "chooser")
+        kanidm["features"]["sso"]["default_login"] = "chooser"
+        self.assertEqual(mas_config.resolve_sso_default_login(kanidm), "chooser")
 
     def test_build_mas_upstream_oauth2_yaml_uses_string_scope(self):
         providers = [

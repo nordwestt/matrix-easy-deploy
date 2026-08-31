@@ -28,6 +28,9 @@ source "${SCRIPT_DIR}/scripts/setup/modules.sh"
 # shellcheck source=scripts/sso.sh
 source "${SCRIPT_DIR}/scripts/sso.sh"
 
+EASYDEPLOY_INVOKE_ARGS=("$@")
+clear_parent_python_env
+
 IFS=' ' read -ra DOCKER_COMPOSE <<< "$(docker_compose_cmd)"
 DEPLOY_ENV="${SCRIPT_DIR}/.env"
 DEPLOY_YAML="${SCRIPT_DIR}/deploy.yaml"
@@ -324,6 +327,7 @@ edit_deploy_config() {
 run_full_setup() {
     print_banner
     ensure_dependencies_installed
+    ensure_docker_group_session "${EASYDEPLOY_INVOKE_ARGS[@]}"
 
     echo
     echo -e "${BOLD}  Step 1 of 5 — Configuration${RESET}"

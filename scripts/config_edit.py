@@ -252,23 +252,23 @@ def normalize_proxy_mode(value: str | None) -> str:
     return mode
 
 
-def read_authelia_domain(deploy_path: Path) -> str:
+def read_kanidm_domain(deploy_path: Path) -> str:
     if not deploy_path.is_file():
         return ""
     with deploy_path.open() as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
         return ""
-    return str((data.get("authelia") or {}).get("domain") or "").strip()
+    return str((data.get("kanidm") or {}).get("domain") or "").strip()
 
 
-def discover_local_authelia(matrix_root: Path) -> dict[str, str]:
-    """Find a sibling (or engine-exported) Authelia deploy.yaml and portal domain."""
+def discover_local_kanidm(matrix_root: Path) -> dict[str, str]:
+    """Find a sibling (or engine-exported) Kanidm deploy.yaml and portal domain."""
     candidates: list[Path] = []
-    env_deploy = str(os.environ.get("EASYDEPLOY_AUTHELIA_DEPLOY") or "").strip()
+    env_deploy = str(os.environ.get("EASYDEPLOY_KANIDM_DEPLOY") or "").strip()
     if env_deploy:
         candidates.append(Path(env_deploy).expanduser())
-    candidates.append((matrix_root.parent / "authelia-easy-deploy" / "deploy.yaml").resolve())
+    candidates.append((matrix_root.parent / "kanidm-easy-deploy" / "deploy.yaml").resolve())
 
     seen: set[Path] = set()
     for path in candidates:
@@ -276,23 +276,23 @@ def discover_local_authelia(matrix_root: Path) -> dict[str, str]:
         if resolved in seen:
             continue
         seen.add(resolved)
-        domain = read_authelia_domain(resolved)
+        domain = read_kanidm_domain(resolved)
         if domain:
             return {"domain": domain, "deploy": str(resolved)}
 
-    env_domain = str(os.environ.get("EASYDEPLOY_AUTHELIA_DOMAIN") or "").strip()
+    env_domain = str(os.environ.get("EASYDEPLOY_KANIDM_DOMAIN") or "").strip()
     if env_domain:
         return {"domain": env_domain, "deploy": env_deploy}
     return {}
 
 
-def emit_local_authelia(matrix_root: Path) -> str:
-    found = discover_local_authelia(matrix_root)
+def emit_local_kanidm(matrix_root: Path) -> str:
+    found = discover_local_kanidm(matrix_root)
     domain = found.get("domain", "")
     deploy = found.get("deploy", "")
     return (
-        f"LOCAL_AUTHELIA_DOMAIN={shlex.quote(domain)}\n"
-        f"LOCAL_AUTHELIA_DEPLOY={shlex.quote(deploy)}\n"
+        f"LOCAL_KANIDM_DOMAIN={shlex.quote(domain)}\n"
+        f"LOCAL_KANIDM_DEPLOY={shlex.quote(deploy)}\n"
     )
 
 
@@ -548,7 +548,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     action.add_argument("--set-sso", action="store_true")
     action.add_argument("--set-backup-config", action="store_true")
     action.add_argument("--print-wizard-defaults", action="store_true")
-    action.add_argument("--print-local-authelia", action="store_true")
+    action.add_argument("--print-local-kanidm", action="store_true")
     action.add_argument("--print-module-defaults")
     action.add_argument("--print-backup-defaults", action="store_true")
 
@@ -593,8 +593,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     deploy_yaml = Path(args.deploy_yaml)
-    if args.print_local_authelia:
-        print(emit_local_authelia(deploy_yaml.expanduser().resolve().parent), end="")
+    if args.print_local_kanidm:
+        print(emit_local_kanidm(deploy_yaml.expanduser().resolve().parent), end="")
         return 0
     config = load_or_init(deploy_yaml)
 

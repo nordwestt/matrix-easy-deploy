@@ -4,6 +4,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}" && pwd)"
+# shellcheck source=scripts/lib.sh
+source "${SCRIPT_DIR}/scripts/lib.sh"
+
+clear_parent_python_env
+ensure_docker_group_session "$@"
 
 ensure_dependencies="false"
 python_args=()

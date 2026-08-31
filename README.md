@@ -731,11 +731,11 @@ During setup (default: enabled), provide:
 
 You can configure multiple providers in one run (for example Google + Okta + Authentik).
 
-When Authelia is already deployed next to this kit (or the engine wizard exported it), the Matrix wizard asks **Use Authelia at https://auth… as Matrix SSO?** and fills issuer, client ID, and secret for you. Re-apply Authelia afterwards so it picks up the generated client sidecar. Independent Matrix installs with no Authelia sibling keep the Google/Entra prompts.
+When Kanidm is already deployed next to this kit (or the engine wizard exported it), the Matrix wizard asks **Use Kanidm at https://idm… as Matrix SSO?** and fills issuer and client ID for you. Re-apply Kanidm afterwards so it creates the confidential client and writes the secret back. Independent Matrix installs with no Kanidm sibling keep the Google/Entra prompts.
 
-Element then sends users **straight to Authelia**. The auth service also turns off its password form in that mode, so MAS redirects to Authelia instead of showing local + Authelia. You do not need extra `deploy.yaml` keys for that.
+Element then sends users **straight to Kanidm**. The auth service also turns off its password form in that mode, so MAS redirects to Kanidm instead of showing local + Kanidm. You do not need extra `deploy.yaml` keys for that.
 
-To show local password login alongside Authelia again:
+To show local password login alongside Kanidm again:
 
 ```yaml
 features:
@@ -749,7 +749,7 @@ When creating the OIDC app in your identity provider, set the redirect/callback 
 https://<your-matrix-domain>/auth/upstream/callback/<provider-id>
 ```
 
-`apply.sh` assigns the 26-character provider id (and prints it in MAS config). Authelia on the same VPS is registered automatically.
+`apply.sh` assigns the 26-character provider id (and prints it in MAS config). Kanidm on the same VPS is registered automatically. The issuer is `https://idm.example.com/oauth2/openid/matrix`.
 
 Example for Google:
 - Create an OAuth client in Google Cloud Console

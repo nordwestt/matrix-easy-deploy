@@ -78,34 +78,34 @@ PY
 }
 
 gather_sso_config() {
-    local LOCAL_AUTHELIA_DOMAIN="" LOCAL_AUTHELIA_DEPLOY=""
-    local use_local_authelia="n"
+    local LOCAL_KANIDM_DOMAIN="" LOCAL_KANIDM_DEPLOY=""
+    local use_local_kanidm="n"
     SSO_PROVIDER=""
     SSO_DEFAULT_LOGIN=""
     local deploy_yaml="${DEPLOY_YAML:-${SCRIPT_DIR}/deploy.yaml}"
-    eval "$(python3 "${SCRIPT_DIR}/scripts/config_edit.py" --deploy-yaml "$deploy_yaml" --print-local-authelia)"
-    if [[ -n "${LOCAL_AUTHELIA_DOMAIN:-}" ]]; then
+    eval "$(python3 "${SCRIPT_DIR}/scripts/config_edit.py" --deploy-yaml "$deploy_yaml" --print-local-kanidm)"
+    if [[ -n "${LOCAL_KANIDM_DOMAIN:-}" ]]; then
         if [[ "${FROM_ENGINE:-0}" == "1" ]]; then
-            use_local_authelia="y"
-            info "Using Authelia on this VPS at https://${LOCAL_AUTHELIA_DOMAIN} for Matrix SSO."
+            use_local_kanidm="y"
+            info "Using Kanidm on this VPS at https://${LOCAL_KANIDM_DOMAIN} for Matrix SSO."
         else
-            ask_yn use_local_authelia \
-                "Use Authelia at https://${LOCAL_AUTHELIA_DOMAIN} as Matrix SSO?" \
+            ask_yn use_local_kanidm \
+                "Use Kanidm at https://${LOCAL_KANIDM_DOMAIN} as Matrix SSO?" \
                 "y"
         fi
     fi
 
-    if [[ "$use_local_authelia" == "y" ]]; then
-        if [[ -z "${LOCAL_AUTHELIA_DOMAIN:-}" ]]; then
-            die "Authelia was selected but no portal domain was found."
+    if [[ "$use_local_kanidm" == "y" ]]; then
+        if [[ -z "${LOCAL_KANIDM_DOMAIN:-}" ]]; then
+            die "Kanidm was selected but no identity domain was found."
         fi
         ENABLE_SSO="true"
-        SSO_PROVIDER="authelia"
+        SSO_PROVIDER="kanidm"
         SSO_DEFAULT_LOGIN="sso"
         OIDC_PROVIDERS_JSON="[]"
         OIDC_PROVIDER_COUNT=1
-        OIDC_PROVIDER_NAMES="Authelia"
-        info "OIDC issuer: https://${LOCAL_AUTHELIA_DOMAIN} (apply will register the Authelia client)."
+        OIDC_PROVIDER_NAMES="Kanidm"
+        info "OIDC issuer: https://${LOCAL_KANIDM_DOMAIN}/oauth2/openid/matrix (apply will register the Kanidm client)."
         if [[ "${FROM_ENGINE:-0}" == "1" ]]; then
             return 0
         fi
@@ -135,8 +135,8 @@ gather_sso_config() {
     fi
 
     local _used_idp_ids=" "
-    if [[ "$SSO_PROVIDER" == "authelia" ]]; then
-        _used_idp_ids=" authelia "
+    if [[ "$SSO_PROVIDER" == "kanidm" ]]; then
+        _used_idp_ids=" kanidm "
     fi
 
     while true; do
