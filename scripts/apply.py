@@ -2321,6 +2321,74 @@ def reconcile_mas_bootstrap(ctx: ApplyContext, config: dict, env_vars: dict) -> 
     print("MAS bootstrap: database ready")
 
 
+def _appservice_data_is_writable(directory: Path) -> bool:
+    """True when this process can create and delete a file in directory."""
+    probe = directory / ".med-apply-write-test"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe.write_text("ok")
+        probe.unlink()
+        return True
+    except PermissionError:
+        return False
+    except OSError:
+        return False
+
+
+def _chmod_appservice_data_privileged(directory: Path) -> bool:
+    """Open up a Synapse-owned data dir so apply can sync appservice files.
+
+    start.sh later restores uid 991 and mode 750/640.
+    """
+    target = str(directory.resolve())
+    docker = shutil.which("docker")
+    if docker:
+        result = subprocess.run(
+            [
+                docker,
+                "run",
+                "--rm",
+                "-v",
+                f"{target}:/data",
+                "alpine:3",
+                "sh",
+                "-c",
+                "chmod -R a+rwX /data",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return True
+    sudo = shutil.which("sudo")
+    if sudo:
+        result = subprocess.run(
+            [sudo, "-n", "chmod", "-R", "a+rwX", target],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return True
+    return False
+
+
+def ensure_appservice_data_accessible(directory: Path) -> None:
+    """Make homeserver appservice data writable for this apply process.
+
+    Synapse bind-mounts this dir as uid 991 with mode 750, so an unprivileged
+    apply user cannot even stat leftover registration files.
+    """
+    if _appservice_data_is_writable(directory):
+        return
+    if _chmod_appservice_data_privileged(directory) and _appservice_data_is_writable(directory):
+        return
+    raise PermissionError(
+        f"Cannot access {directory} (Synapse data is typically owned by uid 991). "
+        f"Fix with: sudo chmod -R a+rwX {directory} "
+        "then re-run bash apply.sh. start.sh restores Synapse ownership."
+    )
+
+
 def reconcile_bridge_appservices(ctx: ApplyContext, config: dict) -> None:
     modules_cfg = config.get("modules", {}) if isinstance(config.get("modules", {}), dict) else {}
     hs_spec = homeserver.get_spec(config)
@@ -2331,6 +2399,8 @@ def reconcile_bridge_appservices(ctx: ApplyContext, config: dict) -> None:
     homeserver_config = ctx.project_root / hs_spec.rendered_config_rel
     if not homeserver_config.exists():
         return
+
+    ensure_appservice_data_accessible(ctx.project_root / hs_spec.appservice_data_rel)
 
     for config_key, spec in bridge_specs.items():
         desired = modules_cfg.get(config_key, {}) if isinstance(modules_cfg.get(config_key, {}), dict) else {}

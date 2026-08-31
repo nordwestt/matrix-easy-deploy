@@ -1342,6 +1342,51 @@ class ApplyTests(unittest.TestCase):
         self.assertNotIn("# BEGIN MED-HOOKSHOT BLOCK", cleaned_caddy)
         self.assertNotIn("hookshot.example.com {", cleaned_caddy)
 
+    def test_reconcile_disabled_hookshot_when_synapse_data_not_traversable(self):
+        cfg = self.sample_config()
+        cfg["modules"]["hookshot"] = {"enabled": False}
+        self.write_config(cfg)
+
+        homeserver = self.root / "modules/core/synapse/homeserver.yaml"
+        homeserver.parent.mkdir(parents=True, exist_ok=True)
+        homeserver.write_text(
+            "server_name: example.com\n"
+            "app_service_config_files:\n"
+            "  - /data/hookshot-registration.yml\n"
+        )
+
+        dest_dir = self.root / "modules/core/synapse_data"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / "hookshot-registration.yml"
+        dest.write_text("hookshot-reg\n")
+        dest_dir.chmod(0o000)
+
+        def restore_access(directory):
+            directory.chmod(0o777)
+            return True
+
+        ctx = apply.ApplyContext(self.root)
+        try:
+            with patch("scripts.apply._chmod_appservice_data_privileged", side_effect=restore_access):
+                apply.reconcile_bridge_appservices(ctx, cfg)
+        finally:
+            dest_dir.chmod(0o755)
+
+        self.assertFalse(dest.exists())
+        self.assertNotIn("/data/hookshot-registration.yml", homeserver.read_text())
+
+    def test_ensure_appservice_data_accessible_raises_clear_error(self):
+        dest_dir = self.root / "modules/core/synapse_data"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_dir.chmod(0o000)
+        try:
+            with patch("scripts.apply._chmod_appservice_data_privileged", return_value=False):
+                with self.assertRaises(PermissionError) as raised:
+                    apply.ensure_appservice_data_accessible(dest_dir)
+            self.assertIn("sudo chmod -R a+rwX", str(raised.exception))
+        finally:
+            dest_dir.chmod(0o755)
+
     def test_apply_reconciles_disabled_hookshot_legacy_caddy_using_env_domain_fallback(self):
         cfg = self.sample_config()
         cfg["modules"]["hookshot"] = {
