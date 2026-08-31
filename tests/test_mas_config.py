@@ -182,6 +182,23 @@ class MasConfigUpstreamOauth2Tests(unittest.TestCase):
         self.assertIn("localpart:\n        action: ignore", yaml_text)
         self.assertNotIn("preferred_username", yaml_text)
         self.assertIn("account_name:\n        template: '{{ user.email }}'", yaml_text)
+        self.assertNotIn("id_token_signed_response_alg", yaml_text)
+
+    def test_build_mas_upstream_oauth2_yaml_kanidm_uses_es256(self):
+        providers = [
+            {
+                "id": "01HFVBY12TMNTYTBV8W921M5FA",
+                "name": "Kanidm",
+                "issuer": "https://idm.test.example/oauth2/openid/matrix",
+                "client_id": "matrix",
+                "client_secret": "secret",
+            }
+        ]
+        yaml_text = mas_config.build_mas_upstream_oauth2_yaml(
+            providers,
+            "https://matrix.test.example/auth/",
+        )
+        self.assertIn("id_token_signed_response_alg: ES256", yaml_text)
 
     def test_oauth_scope_string_accepts_list_or_string(self):
         self.assertEqual(

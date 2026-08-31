@@ -57,6 +57,8 @@ def mas_upstream_redirect_uri(mas_public_base: str, provider_id: str) -> str:
 KANIDM_SSO_NAME = "Kanidm"
 DEFAULT_MATRIX_OIDC_CLIENT_ID = "matrix"
 LOCAL_IDP_PROVIDERS = {"kanidm"}
+# MAS defaults to RS256 (OIDC spec). Kanidm signs with ES256 unless legacy RSA is enabled.
+KANIDM_ID_TOKEN_SIGNED_RESPONSE_ALG = "ES256"
 
 
 def kanidm_issuer_url(kanidm_domain: str, client_id: str = DEFAULT_MATRIX_OIDC_CLIENT_ID) -> str:
@@ -590,6 +592,11 @@ def build_mas_upstream_oauth2_yaml(providers: list, mas_public_base: str) -> str
         brand = provider.get("brand_name")
         if isinstance(brand, str) and brand.strip():
             entry["brand_name"] = brand.strip()
+        alg = str(provider.get("id_token_signed_response_alg") or "").strip()
+        if not alg and is_kanidm_sso_provider(provider):
+            alg = KANIDM_ID_TOKEN_SIGNED_RESPONSE_ALG
+        if alg:
+            entry["id_token_signed_response_alg"] = alg
         entries.append(entry)
 
     payload = {"upstream_oauth2": {"providers": entries}}
