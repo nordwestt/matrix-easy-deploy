@@ -23,6 +23,8 @@ LiveKit still uses host networking; engine Caddy reaches it via `host.docker.int
 
 Standalone mode (`mode: standalone`, default) keeps the local `caddy` container on ports 80/443.
 
+When Stalwart/Bulwark is enabled on the same engine, apply writes `.matrix-easy-deploy/integration/embed.yaml` so Element can load inside Bulwark's inline iframe. Re-apply this kit after changing `bulwark.domain`.
+
 SSO is **MAS** with optional upstream OIDC providers. On a VPS that also has Kanidm, the wizard offers Kanidm as SSO without typing issuer, client ID, or secret. The engine (or a sibling `kanidm-easy-deploy` checkout) registers the confidential MAS client. Kanidm issuers are per-client (`https://idm.example.com/oauth2/openid/matrix`). Independent Matrix installs with Google/Entra are unchanged.
 
 See [easydeploy-engine/docs/integrated-vps.md](https://github.com/opencomp-eu/easydeploy-engine/blob/master/docs/integrated-vps.md).

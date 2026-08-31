@@ -103,6 +103,12 @@ modules:
   slack_bridge:
     enabled: false
     admin_username: admin
+
+# Origins allowed to iframe Element (Bulwark webmail). On a same-VPS engine
+# install this is filled from bulwark.domain; set it here for standalone or extras.
+# embed:
+#   frame_ancestors:
+#     - https://webmail.example.com
 backup:
   enabled: false
   repository:

@@ -596,6 +596,22 @@ Notes:
 - To disable Scalar integrations entirely, set `features.element.integrations.enabled: false`.
 - For less common Element settings, use `features.element.extra_config` to merge raw config into the generated JSON.
 
+### Display Element inside Bulwark (iframe)
+
+Bulwark can show Element inline. Element (and Caddy) default to `frame-ancestors 'self'` / `X-Frame-Options: SAMEORIGIN`, which blocks that.
+
+On a same-VPS engine install, re-run `bash apply.sh` in easydeploy-engine. It writes `.matrix-easy-deploy/integration/embed.yaml` from `bulwark.domain` (whatever hostname you gave webmail). This kit then lets that origin embed Element, including when Element is on a separate host such as `chat.example.com`.
+
+Standalone, or for extra parents:
+
+```yaml
+embed:
+  frame_ancestors:
+    - https://webmail.example.com
+```
+
+Set `embed.managed: false` to ignore the engine sidecar.
+
 ### Element Call guest access (optional)
 
 Enable shareable meeting links for people without Matrix accounts (like Google Meet). This deploys a lightweight guest Tuwunel server and a self-hosted [Element Call](https://github.com/element-hq/element-call) SPA, reusing your existing LiveKit stack.

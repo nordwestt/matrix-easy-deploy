@@ -353,8 +353,10 @@ def build_caddy_element_routing(
     server_name: str,
     element_enabled: bool,
     element_domain: str,
+    frame_ancestors: list[str] | None = None,
 ) -> dict[str, str]:
     """Place Element in the Matrix site block when it shares a hostname."""
+    ancestors = unique_https_origins(frame_ancestors)
     if not element_enabled or not element_domain:
         return {
             "CADDY_ELEMENT_MATRIX_FALLBACK": "",
@@ -365,14 +367,15 @@ def build_caddy_element_routing(
     if server_name != matrix_domain:
         matrix_hosts.add(server_name)
 
+    proxy = caddy_element_proxy_and_headers(ancestors)
     element_fallback = (
         "\n    # Element web client (same host as Matrix API)\n"
         "    handle /config.json {\n"
         '        header Cache-Control "no-cache"\n'
-        "        reverse_proxy matrix_element:80\n"
+        f"{proxy}\n"
         "    }\n\n"
         "    handle {\n"
-        "        reverse_proxy matrix_element:80\n"
+        f"{proxy}\n"
         "    }\n"
     )
 
@@ -382,19 +385,20 @@ def build_caddy_element_routing(
             "CADDY_ELEMENT_SITE_BLOCK": "",
         }
 
+    clickjacking = caddy_clickjacking_header_lines(ancestors)
     element_site = (
         f"\n# Element web client — served on its own domain\n"
         f"{element_domain} {{\n"
         "    handle /config.json {\n"
         '        header Cache-Control "no-cache"\n'
-        "        reverse_proxy matrix_element:80\n"
+        f"{proxy}\n"
         "    }\n\n"
         "    handle {\n"
-        "        reverse_proxy matrix_element:80\n"
+        f"{proxy}\n"
         "    }\n\n"
         "    header {\n"
         "        X-Content-Type-Options nosniff\n"
-        "        X-Frame-Options SAMEORIGIN\n"
+        f"{clickjacking}\n"
         "        Referrer-Policy strict-origin-when-cross-origin\n"
         '        Permissions-Policy "interest-cohort=()"\n'
         "        -Server\n"
@@ -407,6 +411,64 @@ def build_caddy_element_routing(
         "CADDY_ELEMENT_MATRIX_FALLBACK": "",
         "CADDY_ELEMENT_SITE_BLOCK": element_site,
     }
+
+
+def https_origin(value: Any) -> str:
+    """Normalize a hostname or URL to `https://host` with no trailing slash."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "://" in text:
+        scheme, rest = text.split("://", 1)
+        if scheme.lower() not in {"http", "https"}:
+            return ""
+        host = rest.split("/")[0].split("?")[0].split("#")[0].strip().lower()
+    else:
+        host = text.split("/")[0].split("?")[0].split("#")[0].strip().lower()
+    if not host or host in {"webmail.example.com", "example.com", "element.example.com"}:
+        return ""
+    return f"https://{host}"
+
+
+def unique_https_origins(values: Any) -> list[str]:
+    origins: list[str] = []
+    seen: set[str] = set()
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return origins
+    for item in values:
+        origin = https_origin(item)
+        if origin and origin not in seen:
+            seen.add(origin)
+            origins.append(origin)
+    return origins
+
+
+def caddy_element_proxy_and_headers(frame_ancestors: list[str], indent: str = "        ") -> str:
+    """reverse_proxy Element, replacing clickjacking headers when extra parents exist."""
+    if not frame_ancestors:
+        return f"{indent}reverse_proxy matrix_element:80"
+    inner = indent + "    "
+    origins = " ".join(["'self'", *frame_ancestors])
+    return (
+        f"{indent}reverse_proxy matrix_element:80 {{\n"
+        f"{inner}header_down -Content-Security-Policy\n"
+        f"{inner}header_down -X-Frame-Options\n"
+        f"{indent}}}\n"
+        f"{indent}header -X-Frame-Options\n"
+        f'{indent}header Content-Security-Policy "frame-ancestors {origins}"'
+    )
+
+
+def caddy_clickjacking_header_lines(frame_ancestors: list[str], indent: str = "        ") -> str:
+    if not frame_ancestors:
+        return f"{indent}X-Frame-Options SAMEORIGIN"
+    origins = " ".join(["'self'", *frame_ancestors])
+    return (
+        f"{indent}-X-Frame-Options\n"
+        f'{indent}Content-Security-Policy "frame-ancestors {origins}"'
+    )
 
 
 def extract_base_domain(fqdn: str) -> str:

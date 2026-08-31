@@ -268,3 +268,33 @@ class MasConfigCaddyTests(unittest.TestCase):
         self.assertIn("element.example.com {", routing["CADDY_ELEMENT_SITE_BLOCK"])
         self.assertIn("handle /config.json", routing["CADDY_ELEMENT_SITE_BLOCK"])
         self.assertNotIn("matrix_mas", routing["CADDY_ELEMENT_SITE_BLOCK"])
+
+    def test_build_caddy_element_routing_allows_webmail_frame_ancestors(self):
+        routing = mas_config.build_caddy_element_routing(
+            matrix_domain="matrix.example.com",
+            server_name="example.com",
+            element_enabled=True,
+            element_domain="chat.example.com",
+            frame_ancestors=["https://webmail.test.example"],
+        )
+        site = routing["CADDY_ELEMENT_SITE_BLOCK"]
+        self.assertIn("chat.example.com {", site)
+        self.assertIn("header_down -Content-Security-Policy", site)
+        self.assertIn("header_down -X-Frame-Options", site)
+        self.assertIn(
+            'Content-Security-Policy "frame-ancestors \'self\' https://webmail.test.example"',
+            site,
+        )
+        self.assertNotIn("X-Frame-Options SAMEORIGIN", site)
+
+    def test_build_caddy_element_routing_unified_host_strips_element_csp(self):
+        routing = mas_config.build_caddy_element_routing(
+            matrix_domain="matrix.example.com",
+            server_name="example.com",
+            element_enabled=True,
+            element_domain="matrix.example.com",
+            frame_ancestors=["webmail.test.example"],
+        )
+        fallback = routing["CADDY_ELEMENT_MATRIX_FALLBACK"]
+        self.assertIn("header_down -Content-Security-Policy", fallback)
+        self.assertIn("https://webmail.test.example", fallback)

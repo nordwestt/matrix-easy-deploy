@@ -1666,6 +1666,24 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(providers[0]["issuer"], "https://idm.test.example/oauth2/openid/matrix")
         self.assertEqual(providers[0]["id"], "01HFVBY12TMNTYTBV8W921M5FA")
 
+    def test_apply_engine_embed_sidecar_merges_origins(self):
+        sidecar = self.root / "embed.yaml"
+        sidecar.write_text("frame_ancestors:\n  - https://webmail.test.example\n")
+        config = {"embed": {"frame_ancestors": ["portal.test.example"]}}
+        apply.apply_engine_embed_sidecar(config, sidecar)
+        self.assertEqual(
+            apply.extra_frame_ancestors(config),
+            ["https://portal.test.example", "https://webmail.test.example"],
+        )
+
+    def test_derive_values_element_frame_ancestors(self):
+        cfg = self.sample_config()
+        cfg["embed"] = {"frame_ancestors": ["https://webmail.test.example"]}
+        derived = apply.derive_values(cfg, server_ip="1.2.3.4")
+        self.assertIn("https://webmail.test.example", derived["CADDY_ELEMENT_SITE_BLOCK"])
+        self.assertIn("header_down -Content-Security-Policy", derived["CADDY_ELEMENT_SITE_BLOCK"])
+        self.assertEqual(derived["CADDY_MATRIX_FRAME_HEADERS"].strip(), "X-Frame-Options SAMEORIGIN")
+
     def test_apply_engine_oidc_sidecar_skips_google_providers(self):
         sidecar = self.root / "oidc-provider.yaml"
         sidecar.write_text(

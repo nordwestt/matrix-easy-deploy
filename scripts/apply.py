@@ -387,11 +387,41 @@ def load_config(ctx: ApplyContext) -> dict:
         warnings = mas_config.migrate_legacy_mas_features(features)
         mas_config.emit_migration_warnings(warnings)
 
+    apply_engine_embed_sidecar(config, ctx.integration_dir / "embed.yaml")
     return config
 
 
 def oidc_provider_sidecar_path(ctx: ApplyContext) -> Path:
     return ctx.integration_dir / "oidc-provider.yaml"
+
+
+def apply_engine_embed_sidecar(config: dict, sidecar_path: Path | None = None) -> None:
+    """Merge extra frame-ancestors from the engine sidecar (Bulwark webmail)."""
+    embed = config.get("embed")
+    if embed is None:
+        embed = {}
+    elif not isinstance(embed, dict):
+        return
+    if mas_config.managed_is_false(embed):
+        return
+    extra: list[Any] = []
+    if sidecar_path is not None and sidecar_path.is_file():
+        sidecar = yaml.safe_load(sidecar_path.read_text()) or {}
+        if isinstance(sidecar, dict):
+            extra = sidecar.get("frame_ancestors") or []
+    current = embed.get("frame_ancestors") or []
+    merged = mas_config.unique_https_origins(list(current) + list(extra))
+    if merged:
+        target = config.setdefault("embed", {})
+        if isinstance(target, dict):
+            target["frame_ancestors"] = merged
+
+
+def extra_frame_ancestors(config: dict) -> list[str]:
+    embed = config.get("embed") or {}
+    if not isinstance(embed, dict):
+        return []
+    return mas_config.unique_https_origins(embed.get("frame_ancestors"))
 
 
 def provision_local_kanidm_oidc(ctx: ApplyContext, config: dict) -> list[str]:
@@ -677,6 +707,16 @@ def validate_element_config(element: dict) -> None:
     extra_config = element.get("extra_config")
     if extra_config is not None and not isinstance(extra_config, dict):
         raise ValueError("features.element.extra_config must be an object")
+
+
+def validate_embed_config(embed: dict) -> None:
+    ancestors = embed.get("frame_ancestors")
+    if ancestors is None:
+        return
+    if isinstance(ancestors, str):
+        ancestors = [ancestors]
+    if not isinstance(ancestors, list) or any(not str(item or "").strip() for item in ancestors):
+        raise ValueError("embed.frame_ancestors must be a list of hostnames or https origins")
 
 
 AUTO_JOIN_ROOM_OBJECT_KEYS = frozenset({"alias", "name", "topic", "message", "handover", "federated"})
@@ -1163,6 +1203,12 @@ def validate_config(config: dict) -> None:
     if backup is not None and not isinstance(backup, dict):
         raise ValueError("backup must be an object when provided")
 
+    embed = config.get("embed")
+    if embed is not None:
+        if not isinstance(embed, dict):
+            raise ValueError("embed must be an object")
+        validate_embed_config(embed)
+
     if isinstance(features, dict):
         for key in ("registration_enabled", "federation_enabled", "local_login_enabled"):
             if key in features and not isinstance(features[key], bool):
@@ -1449,12 +1495,24 @@ def derive_values(config: dict, server_ip: str | None = None) -> dict:
         hosts.append(server_name)
     derived["CADDY_MATRIX_HOSTS"] = ", ".join(hosts)
 
+    extra_ancestors = extra_frame_ancestors(config)
+    element_on_matrix_host = bool(
+        element_enabled and derived.get("ELEMENT_DOMAIN", "") in set(hosts)
+    )
+    if extra_ancestors and element_on_matrix_host:
+        derived["CADDY_MATRIX_FRAME_HEADERS"] = mas_config.caddy_clickjacking_header_lines(
+            extra_ancestors
+        )
+    else:
+        derived["CADDY_MATRIX_FRAME_HEADERS"] = "        X-Frame-Options SAMEORIGIN"
+
     derived.update(
         mas_config.build_caddy_element_routing(
             matrix_domain=matrix_domain,
             server_name=server_name,
             element_enabled=element_enabled,
             element_domain=derived.get("ELEMENT_DOMAIN", ""),
+            frame_ancestors=extra_ancestors,
         )
     )
 
